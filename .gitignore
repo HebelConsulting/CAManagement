@@ -1,0 +1,16 @@
+# C#
+[Dd]ebug
+[Rr]ealease
+x64/
+[Bb]in/
+[Oo]bj/
+nupkg/
+packages/*
+
+*.user
+
+# MacOS
+.DS_Store
+
+# Rider
+.idea/
