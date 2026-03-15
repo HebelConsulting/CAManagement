@@ -2,6 +2,8 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pkcs11Interop", "Pkcs11Interop\Pkcs11Interop.csproj", "{B920AE08-DDC7-46C7-B2F6-8B444EBDD932}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CAConsole", "CAConsole\CAConsole.csproj", "{56D3E88B-DDF5-47EF-B874-096B3600619B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -16,5 +18,9 @@ Global
 		{B920AE08-DDC7-46C7-B2F6-8B444EBDD932}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B920AE08-DDC7-46C7-B2F6-8B444EBDD932}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B920AE08-DDC7-46C7-B2F6-8B444EBDD932}.Release|Any CPU.Build.0 = Release|Any CPU
+		{56D3E88B-DDF5-47EF-B874-096B3600619B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{56D3E88B-DDF5-47EF-B874-096B3600619B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{56D3E88B-DDF5-47EF-B874-096B3600619B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{56D3E88B-DDF5-47EF-B874-096B3600619B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
