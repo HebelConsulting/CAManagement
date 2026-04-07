@@ -118,6 +118,10 @@ public struct CK_FUNCTION_LIST
 
     public IntPtr C_DigestEncryptUpdate;
 
+    public IntPtr C_DecryptDigestUpdate;
+
+    public IntPtr C_SignEncryptUpdate;
+    
     public IntPtr C_DecryptVerifyUpdate;
 
     public IntPtr C_GenerateKey;
