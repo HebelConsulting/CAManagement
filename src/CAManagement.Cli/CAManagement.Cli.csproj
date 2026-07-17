@@ -13,6 +13,8 @@
         <Company>Hebel Consulting GmbH</Company>
         <AssemblyName>caconsole</AssemblyName>
         <DebugType>embedded</DebugType>
+        <!-- No libicu dependency on Linux targets; deterministic invariant formatting. -->
+        <InvariantGlobalization>true</InvariantGlobalization>
     </PropertyGroup>
 
     <ItemGroup>

@@ -115,6 +115,18 @@ public sealed class Pkcs11Options
   arm64 `libsofthsm2.so`. `caconsole info` needs an initialized token in the
   active `SOFTHSM2_CONF`; the default config reports `CKR_TOKEN_NOT_RECOGNIZED`.
 
+## Publishing (added 2026-07-17)
+- `scripts/publish.sh` builds self-contained single-file `caconsole` binaries
+  for **osx-arm64, osx-x64, linux-x64** into `dist/<rid>/` (binary +
+  `appsettings.json`; debug info embedded). No trimming (reflection-based DI)
+  and no ReadyToRun (keeps cross-OS publishing from macOS possible).
+- `InvariantGlobalization=true` on the CLI: self-contained does NOT bundle
+  native OS deps — without it the Linux binary fail-fasts on missing libicu
+  (verified in a bare Debian container). Invariant formatting is also the
+  right behavior for a crypto CLI.
+- Verified: arm64 natively (real workload), osx-x64 under Rosetta, linux-x64
+  in a linux/amd64 Debian container (help + analyzer workload).
+
 ## Project naming (renamed 2026-07-17)
 Projects/namespaces were renamed to dotted product names — earlier sections may
 use the old names:
