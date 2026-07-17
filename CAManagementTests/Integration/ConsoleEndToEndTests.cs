@@ -72,6 +72,46 @@ public sealed class ConsoleEndToEndTests
             Assert.Contains(leafCertificate.SerialNumber,
                 Convert.ToHexString(crlDer), StringComparison.OrdinalIgnoreCase);
 
+            // --- ocsp-respond: file mode ----------------------------------------
+            var opensslAvailable = File.Exists("/usr/bin/openssl");
+            if (opensslAvailable)
+            {
+                var reqGen = Run("/usr/bin/openssl", ["ocsp", "-issuer", "ca.crt", "-cert", "leaf.crt",
+                    "-reqout", "ocsp-req.der", "-no_nonce"], workDir.FullName, environment);
+                Assert.True(reqGen.ExitCode == 0, $"openssl request generation failed: {reqGen.Output}");
+
+                var respond = Run(binary, ["ocsp-respond", "--ca-label", "e2e-root", "--ca-cert", "ca.crt",
+                    "--reqin", "ocsp-req.der", "--respout", "ocsp-resp.der"], workDir.FullName, environment);
+                Assert.True(respond.ExitCode == 0, $"ocsp-respond failed: {respond.Output}");
+
+                var ocspVerify = Run("/usr/bin/openssl", ["ocsp", "-respin", "ocsp-resp.der",
+                    "-issuer", "ca.crt", "-cert", "leaf.crt", "-CAfile", "ca.crt"], workDir.FullName, environment);
+                Assert.True(ocspVerify.ExitCode == 0, $"openssl OCSP verification failed: {ocspVerify.Output}");
+                Assert.Contains("Response verify OK", ocspVerify.Output);
+                Assert.Contains("leaf.crt: revoked", ocspVerify.Output); // revoked above, before gen-crl
+            }
+
+            // --- ocsp-respond: HTTP mode ----------------------------------------
+            if (opensslAvailable)
+            {
+                var port = FreeTcpPort();
+                using var server = StartBackground(binary, ["ocsp-respond", "--ca-label", "e2e-root",
+                    "--ca-cert", "ca.crt", "--listen", $"http://127.0.0.1:{port}/", "--max-requests", "1"],
+                    workDir.FullName, environment);
+
+                WaitUntilListening(port);
+
+                var httpVerify = Run("/usr/bin/openssl", ["ocsp", "-url", $"http://127.0.0.1:{port}/",
+                    "-issuer", "ca.crt", "-cert", "leaf.crt", "-CAfile", "ca.crt", "-no_nonce"],
+                    workDir.FullName, environment);
+                Assert.True(httpVerify.ExitCode == 0, $"openssl OCSP-over-HTTP failed: {httpVerify.Output}");
+                Assert.Contains("Response verify OK", httpVerify.Output);
+                Assert.Contains("leaf.crt: revoked", httpVerify.Output);
+
+                Assert.True(server.WaitForExit(30_000), "responder should exit after --max-requests 1");
+                Assert.Equal(0, server.ExitCode);
+            }
+
             // --- asn -------------------------------------------------------------
             var asn = Run(binary, ["asn", "ca.crt"], workDir.FullName, environment);
             Assert.True(asn.ExitCode == 0, $"asn failed: {asn.Output}");
@@ -139,6 +179,64 @@ public sealed class ConsoleEndToEndTests
         Assert.True(init.ExitCode == 0, $"token init failed: {init.Output}");
 
         return environment;
+    }
+
+    private static int FreeTcpPort()
+    {
+        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        listener.Stop();
+
+        return port;
+    }
+
+    private static void WaitUntilListening(int port)
+    {
+        for (var attempt = 0; attempt < 100; attempt++)
+        {
+            try
+            {
+                using var client = new System.Net.Sockets.TcpClient();
+                client.Connect(System.Net.IPAddress.Loopback, port);
+                return;
+            }
+            catch (System.Net.Sockets.SocketException)
+            {
+                Thread.Sleep(100);
+            }
+        }
+
+        throw new TimeoutException($"OCSP responder did not start listening on port {port}.");
+    }
+
+    private static Process StartBackground(
+        string fileName, string[] arguments, string workingDirectory, Dictionary<string, string> environment)
+    {
+        var startInfo = new ProcessStartInfo(fileName)
+        {
+            WorkingDirectory = workingDirectory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+        foreach (var (key, value) in environment)
+        {
+            startInfo.Environment[key] = value;
+        }
+
+        var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException($"Could not start '{fileName}'.");
+
+        // Drain pipes in the background so the child never blocks on full buffers.
+        process.StandardOutput.ReadToEndAsync();
+        process.StandardError.ReadToEndAsync();
+
+        return process;
     }
 
     private static byte[] ReadPem(string directory, string fileName) =>

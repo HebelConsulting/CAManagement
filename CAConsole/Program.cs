@@ -38,6 +38,8 @@ app.Configure(config =>
         .WithDescription("Record a certificate revocation in the CA state file.");
     config.AddCommand<GenCrlCommand>("gen-crl")
         .WithDescription("Sign a CRL from the CA state file using the token-resident CA key.");
+    config.AddCommand<OcspRespondCommand>("ocsp-respond")
+        .WithDescription("Answer OCSP requests (file mode or HTTP) from the CA state file.");
 });
 
 return app.Run(args);

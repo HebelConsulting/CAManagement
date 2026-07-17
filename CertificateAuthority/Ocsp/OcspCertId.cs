@@ -16,6 +16,19 @@ public sealed record OcspCertId(string HashAlgorithmOid, byte[] IssuerNameHash, 
             Hash(hashAlgorithm, issuerPublicKey.PublicKeyBytes),
             Der.TrimLeadingZeros(serialNumber).ToArray());
 
+    /// <summary>
+    /// Does this CertID refer to the given issuer? Recomputes the name/key hashes
+    /// with this CertID's own hash algorithm (the serial is not considered).
+    /// Throws <see cref="NotSupportedException"/> for unsupported hash algorithms.
+    /// </summary>
+    public bool MatchesIssuer(byte[] issuerNameDer, SubjectPublicKeyInfo issuerPublicKey)
+    {
+        var hashAlgorithm = HashAlgorithmFromOid(HashAlgorithmOid);
+
+        return IssuerNameHash.AsSpan().SequenceEqual(Hash(hashAlgorithm, issuerNameDer))
+            && IssuerKeyHash.AsSpan().SequenceEqual(Hash(hashAlgorithm, issuerPublicKey.PublicKeyBytes));
+    }
+
     /// <summary>Same certificate identified with the same hash algorithm?</summary>
     public bool Matches(OcspCertId other) =>
         HashAlgorithmOid == other.HashAlgorithmOid
@@ -64,6 +77,15 @@ public sealed record OcspCertId(string HashAlgorithmOid, byte[] IssuerNameHash, 
         "SHA384" => Oids.Sha384,
         "SHA512" => Oids.Sha512,
         var other => throw new NotSupportedException($"Unsupported CertID hash algorithm '{other}'."),
+    };
+
+    private static HashAlgorithmName HashAlgorithmFromOid(string oid) => oid switch
+    {
+        Oids.Sha1 => HashAlgorithmName.SHA1,
+        Oids.Sha256 => HashAlgorithmName.SHA256,
+        Oids.Sha384 => HashAlgorithmName.SHA384,
+        Oids.Sha512 => HashAlgorithmName.SHA512,
+        _ => throw new NotSupportedException($"Unsupported CertID hash algorithm OID {oid}."),
     };
 
     private static byte[] Hash(HashAlgorithmName hashAlgorithm, byte[] data) => hashAlgorithm.Name switch

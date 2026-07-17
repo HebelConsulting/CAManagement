@@ -177,6 +177,22 @@ public sealed class OcspTests : IDisposable
     }
 
     [Fact]
+    public void MatchesIssuer_distinguishes_our_ca_from_a_foreign_one()
+    {
+        var certId = LeafCertId();
+
+        Assert.True(certId.MatchesIssuer(_caName.Encode(), _caSpki));
+
+        using var foreignKey = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var foreignParameters = foreignKey.ExportParameters(includePrivateParameters: false);
+        var foreignSpki = SubjectPublicKeyInfo.FromEc(Oids.Prime256V1, [0x04, .. foreignParameters.Q.X!, .. foreignParameters.Q.Y!]);
+        var foreignName = DistinguishedName.Builder().CommonName("Foreign CA").Build();
+
+        Assert.False(certId.MatchesIssuer(foreignName.Encode(), _caSpki)); // wrong name
+        Assert.False(certId.MatchesIssuer(_caName.Encode(), foreignSpki)); // wrong key
+    }
+
+    [Fact]
     public void Nonce_is_echoed_byte_identically()
     {
         var nonce = new byte[] { 0x04, 0x10, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A };
