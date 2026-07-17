@@ -121,7 +121,17 @@ public sealed class Pkcs11Options
 - Clean code; tests written alongside implementation.
 - **No architectural decisions without prior consent.**
 
+## CA library design (agreed 2026-07-17)
+
+| # | Topic | Decision |
+|---|-------|----------|
+| D1 | Encoding primitive | **`System.Formats.Asn1`** (`AsnWriter`/`AsnReader`, DER). We author every structure; we do not re-implement TLV. |
+| D2 | Structure modeling | **Own DER models** (`TbsCertificate`, `DistinguishedName`, `AlgorithmIdentifier`, SPKI, extensions). Framework X.509 types are used in *tests only* as an independent verifier. |
+| D3 | Layout | **Split**: `CertificateAuthority` (pure, no Pkcs11Interop reference, exposes `ICertificateSigner`) + `Pkcs11Signing` adapter (references both; owns the ECDSA raw r&#124;&#124;s → DER conversion). |
+| D4 | Scope | v1: Name/AlgId/OIDs/SPKI/TBS + core extensions, self-signed CA cert, issue cert. v2: PKCS#10 CSR, CRL. v3: OCSP, chain helpers. Later phases not started without a go. |
+| D5 | CA state | v1 **stateless** (caller supplies serial/validity; random 16-byte serials by default). State design deferred to the CRL phase. |
+| D6 | Testing | Unit: DER golden vectors, `AsnReader` round trips, software-key signing. Integration: HSM-key CA issues certs validated by `X509Certificate2`/`X509Chain`. |
+
 ## Future
-- Separate library building **DER structures via ASN.1 reader/writer** for CA management.
 - Windows support (activates the #4 platform switches).
 - Optional PKCS#11 3.0 layer via `C_GetInterface` when a 3.0 module is added.
