@@ -131,16 +131,46 @@ public static class CertificateExtensions
         return new CertificateExtension(Oids.AuthorityInfoAccess, Critical: false, writer.Encode());
     }
 
-    /// <summary>certificatePolicies listing plain policy OIDs (no qualifiers).</summary>
-    public static CertificateExtension CertificatePolicies(params string[] policyOids)
+    /// <summary>certificatePolicies with plain policy OIDs (no qualifiers).</summary>
+    public static CertificateExtension CertificatePolicies(params string[] policyOids) =>
+        CertificatePolicies(policyOids.Select(oid => new PolicyInformation(oid)).ToArray());
+
+    /// <summary>certificatePolicies with optional CPS-URI and user-notice qualifiers per policy.</summary>
+    public static CertificateExtension CertificatePolicies(params PolicyInformation[] policies)
     {
         var writer = new AsnWriter(AsnEncodingRules.DER);
         writer.PushSequence();
 
-        foreach (var policyOid in policyOids)
+        foreach (var policy in policies)
         {
             writer.PushSequence();
-            writer.WriteObjectIdentifier(policyOid);
+            writer.WriteObjectIdentifier(policy.PolicyOid);
+
+            if (policy.CpsUri is not null || policy.UserNotice is not null)
+            {
+                writer.PushSequence(); // policyQualifiers
+
+                if (policy.CpsUri is { } cpsUri)
+                {
+                    writer.PushSequence();
+                    writer.WriteObjectIdentifier(Oids.CpsQualifier);
+                    writer.WriteCharacterString(UniversalTagNumber.IA5String, cpsUri);
+                    writer.PopSequence();
+                }
+
+                if (policy.UserNotice is { } userNotice)
+                {
+                    writer.PushSequence();
+                    writer.WriteObjectIdentifier(Oids.UserNoticeQualifier);
+                    writer.PushSequence(); // UserNotice
+                    writer.WriteCharacterString(UniversalTagNumber.UTF8String, userNotice); // explicitText
+                    writer.PopSequence();
+                    writer.PopSequence();
+                }
+
+                writer.PopSequence();
+            }
+
             writer.PopSequence();
         }
 

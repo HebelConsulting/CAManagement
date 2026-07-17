@@ -84,6 +84,33 @@ public sealed class KnownExtensionsTests
     }
 
     [Fact]
+    public void Certificate_policies_with_qualifiers_parse_back()
+    {
+        var extension = CertificateExtensions.CertificatePolicies(
+            new PolicyInformation("1.3.6.1.4.1.99999.1",
+                CpsUri: "https://ca.example.test/cps", UserNotice: "For testing only."),
+            new PolicyInformation("1.3.6.1.4.1.99999.2")); // no qualifiers
+
+        var policies = new AsnReader(extension.Value, AsnEncodingRules.DER).ReadSequence();
+
+        var first = policies.ReadSequence();
+        Assert.Equal("1.3.6.1.4.1.99999.1", first.ReadObjectIdentifier());
+        var qualifiers = first.ReadSequence();
+
+        var cps = qualifiers.ReadSequence();
+        Assert.Equal(Oids.CpsQualifier, cps.ReadObjectIdentifier());
+        Assert.Equal("https://ca.example.test/cps", cps.ReadCharacterString(UniversalTagNumber.IA5String));
+
+        var notice = qualifiers.ReadSequence();
+        Assert.Equal(Oids.UserNoticeQualifier, notice.ReadObjectIdentifier());
+        Assert.Equal("For testing only.", notice.ReadSequence().ReadCharacterString(UniversalTagNumber.UTF8String));
+
+        var second = policies.ReadSequence();
+        Assert.Equal("1.3.6.1.4.1.99999.2", second.ReadObjectIdentifier());
+        Assert.False(second.HasData); // no qualifiers sequence at all
+    }
+
+    [Fact]
     public void Crl_additional_extensions_are_emitted()
     {
         using var caKey = ECDsa.Create(ECCurve.NamedCurves.nistP256);
@@ -144,7 +171,8 @@ public sealed class KnownExtensionsTests
                 CertificateExtensions.IssuerAlternativeName(GeneralName.Uri("https://ca.example.test")),
                 CertificateExtensions.CrlDistributionPoints("http://crl.example.test/ca.crl"),
                 CertificateExtensions.AuthorityInfoAccess("http://ocsp.example.test", "http://ca.example.test/ca.crt"),
-                CertificateExtensions.CertificatePolicies("1.3.6.1.4.1.99999.1"),
+                CertificateExtensions.CertificatePolicies(new PolicyInformation("1.3.6.1.4.1.99999.1",
+                    CpsUri: "https://ca.example.test/cps", UserNotice: "For testing only.")),
             ],
         }.SignSelfSigned(new EcdsaSoftwareSigner(caKey));
 
@@ -180,6 +208,8 @@ public sealed class KnownExtensionsTests
             Assert.Contains("OCSP - URI:http://ocsp.example.test", text);
             Assert.Contains("CA Issuers - URI:http://ca.example.test/ca.crt", text);
             Assert.Contains("Policy: 1.3.6.1.4.1.99999.1", text);
+            Assert.Contains("CPS: https://ca.example.test/cps", text);
+            Assert.Contains("For testing only.", text);
         }
         finally
         {

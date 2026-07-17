@@ -54,6 +54,10 @@ public static class Oids
     public const string OcspBasicResponse = "1.3.6.1.5.5.7.48.1.1";
     public const string OcspNonce = "1.3.6.1.5.5.7.48.1.2";
 
+    // Certificate policy qualifiers (RFC 5280 §4.2.1.4)
+    public const string CpsQualifier = "1.3.6.1.5.5.7.2.1";
+    public const string UserNoticeQualifier = "1.3.6.1.5.5.7.2.2";
+
     // Authority information access methods (RFC 5280 §4.2.2.1)
     public const string AuthorityInfoAccess = "1.3.6.1.5.5.7.1.1";
     public const string AccessMethodOcsp = "1.3.6.1.5.5.7.48.1";

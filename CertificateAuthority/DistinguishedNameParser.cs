@@ -18,9 +18,9 @@ internal static class DistinguishedNameParser
             throw new FormatException("The distinguished name string is empty.");
         }
 
-        IReadOnlyList<string> segments = trimmed.StartsWith('/')
-            ? SplitSlashSegments(trimmed)
-            : trimmed.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var segments = trimmed.StartsWith('/')
+            ? SplitSegments(trimmed, startIndex: 1, separator: '/')
+            : SplitSegments(trimmed, startIndex: 0, separator: ',');
 
         var builder = DistinguishedName.Builder();
         foreach (var segment in segments)
@@ -31,26 +31,29 @@ internal static class DistinguishedNameParser
         return builder.Build();
     }
 
-    /// <summary>Splits "/K=V/K=V" on unescaped '/', unescaping "\/" and "\\".</summary>
-    private static List<string> SplitSlashSegments(string text)
+    /// <summary>
+    /// Splits on the unescaped separator; a backslash escapes the separator and
+    /// itself ("O=ACME\, Inc." / "/CN=path\/x"). Empty segments are dropped.
+    /// </summary>
+    private static List<string> SplitSegments(string text, int startIndex, char separator)
     {
         var segments = new List<string>();
         var current = new System.Text.StringBuilder();
 
-        for (var i = 1; i < text.Length; i++) // skip the leading '/'
+        for (var i = startIndex; i < text.Length; i++)
         {
             var character = text[i];
-            switch (character)
+            if (character == '\\' && i + 1 < text.Length && (text[i + 1] == separator || text[i + 1] == '\\'))
             {
-                case '\\' when i + 1 < text.Length && text[i + 1] is '/' or '\\':
-                    current.Append(text[++i]);
-                    break;
-                case '/':
-                    FlushSegment(segments, current);
-                    break;
-                default:
-                    current.Append(character);
-                    break;
+                current.Append(text[++i]);
+            }
+            else if (character == separator)
+            {
+                FlushSegment(segments, current);
+            }
+            else
+            {
+                current.Append(character);
             }
         }
 
@@ -60,7 +63,7 @@ internal static class DistinguishedNameParser
 
         static void FlushSegment(List<string> segments, System.Text.StringBuilder current)
         {
-            if (current.Length > 0)
+            if (current.ToString().Trim().Length > 0)
             {
                 segments.Add(current.ToString());
             }

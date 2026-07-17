@@ -61,6 +61,23 @@ public sealed class DistinguishedNameParserTests
     }
 
     [Fact]
+    public void Comma_form_unescapes_escaped_commas()
+    {
+        var name = DistinguishedName.Parse(@"O=ACME\, Inc., CN=Escaped");
+
+        Assert.Equal(2, name.Components.Count);
+        Assert.Equal("ACME, Inc.", name.Components[0].Value);
+        Assert.Equal("Escaped", name.Components[1].Value);
+    }
+
+    [Fact]
+    public void Backslash_escapes_itself_in_both_forms()
+    {
+        Assert.Equal(@"a\b", DistinguishedName.Parse(@"CN=a\\b").Components[0].Value);
+        Assert.Equal(@"a\b", DistinguishedName.Parse(@"/CN=a\\b").Components[0].Value);
+    }
+
+    [Fact]
     public void Dotted_oid_keys_are_accepted()
     {
         var name = DistinguishedName.Parse("/2.5.4.3=Direct OID");
