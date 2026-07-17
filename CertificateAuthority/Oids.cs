@@ -31,6 +31,10 @@ public static class Oids
     public const string DomainComponent = "0.9.2342.19200300.100.1.25";
     public const string EmailAddress = "1.2.840.113549.1.9.1";
 
+    // Extended key usage purposes
+    public const string ServerAuthentication = "1.3.6.1.5.5.7.3.1";
+    public const string ClientAuthentication = "1.3.6.1.5.5.7.3.2";
+
     // Certificate extensions
     public const string SubjectKeyIdentifier = "2.5.29.14";
     public const string KeyUsage = "2.5.29.15";
