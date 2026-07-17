@@ -103,8 +103,10 @@ public sealed class ConsoleEndToEndTests
 
     private static string BuildConsole(string repoRoot)
     {
+        // --disable-build-servers: avoid contending for the MSBuild/Roslyn build
+        // servers of the outer `dotnet test` session that is running this test.
         var build = Run("dotnet", ["build", Path.Combine(repoRoot, "CAConsole", "CAConsole.csproj"),
-            "-c", "Debug", "--nologo", "-v", "q"], repoRoot, []);
+            "-c", "Debug", "--nologo", "-v", "q", "--disable-build-servers"], repoRoot, []);
         Assert.True(build.ExitCode == 0, $"console build failed: {build.Output}");
 
         var binary = Path.Combine(repoRoot, "CAConsole", "bin", "Debug", "net10.0", "osx-arm64", "caconsole");
@@ -166,14 +168,17 @@ public sealed class ConsoleEndToEndTests
         using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException($"Could not start '{fileName}'.");
 
-        var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+        // Drain both pipes concurrently — sequential ReadToEnd deadlocks when the
+        // child fills the other pipe's buffer first.
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
 
         if (!process.WaitForExit(120_000))
         {
             process.Kill(entireProcessTree: true);
-            throw new TimeoutException($"'{fileName} {string.Join(' ', arguments)}' did not finish within 120s.\n{output}");
+            throw new TimeoutException($"'{fileName} {string.Join(' ', arguments)}' did not finish within 120s.");
         }
 
-        return (process.ExitCode, output);
+        return (process.ExitCode, stdout.Result + stderr.Result);
     }
 }

@@ -55,6 +55,10 @@ public static class OidNames
         ["2.5.29.32"] = "certificatePolicies",
         ["2.5.29.36"] = "policyConstraints",
         ["1.3.6.1.5.5.7.1.1"] = "authorityInfoAccess",
+        ["1.3.6.1.5.5.7.48.1"] = "ocsp",
+        ["1.3.6.1.5.5.7.48.2"] = "caIssuers",
+        [Oids.OcspBasicResponse] = "id-pkix-ocsp-basic",
+        [Oids.OcspNonce] = "id-pkix-ocsp-nonce",
 
         // EKU purposes
         [Oids.ServerAuthentication] = "serverAuth",

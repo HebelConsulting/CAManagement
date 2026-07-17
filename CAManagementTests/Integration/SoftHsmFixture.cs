@@ -62,13 +62,13 @@ public sealed class SoftHsmFixture : IDisposable
         using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException("Could not start 'softhsm2-util'. Is SoftHSM2 installed?");
 
-        var stdout = process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
         process.WaitForExit();
 
         if (process.ExitCode != 0)
         {
-            throw new InvalidOperationException($"softhsm2-util {arguments} failed (exit {process.ExitCode}).\n{stdout}\n{stderr}");
+            throw new InvalidOperationException($"softhsm2-util {arguments} failed (exit {process.ExitCode}).\n{stdout.Result}\n{stderr.Result}");
         }
     }
 

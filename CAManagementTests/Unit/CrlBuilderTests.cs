@@ -175,10 +175,11 @@ public sealed class CrlBuilderTests
         };
 
         using var process = Process.Start(startInfo)!;
-        var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
         process.WaitForExit();
 
-        return (process.ExitCode, output);
+        return (process.ExitCode, stdout.Result + stderr.Result);
     }
 
     internal static bool CrlSignatureIsValid(byte[] crlDer, X509Certificate2 issuer)

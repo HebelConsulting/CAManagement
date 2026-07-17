@@ -38,6 +38,16 @@ public static class Oids
     public const string ServerAuthentication = "1.3.6.1.5.5.7.3.1";
     public const string ClientAuthentication = "1.3.6.1.5.5.7.3.2";
 
+    // Digest algorithms
+    public const string Sha1 = "1.3.14.3.2.26";
+    public const string Sha256 = "2.16.840.1.101.3.4.2.1";
+    public const string Sha384 = "2.16.840.1.101.3.4.2.2";
+    public const string Sha512 = "2.16.840.1.101.3.4.2.3";
+
+    // OCSP (RFC 6960)
+    public const string OcspBasicResponse = "1.3.6.1.5.5.7.48.1.1";
+    public const string OcspNonce = "1.3.6.1.5.5.7.48.1.2";
+
     // Certificate extensions
     public const string SubjectKeyIdentifier = "2.5.29.14";
     public const string KeyUsage = "2.5.29.15";

@@ -20,6 +20,15 @@ internal static class Der
         }
     }
 
+    /// <summary>OCSP mandates GeneralizedTime regardless of year; truncated to whole seconds.</summary>
+    internal static void WriteGeneralizedTime(AsnWriter writer, DateTimeOffset value)
+    {
+        var utc = value.UtcDateTime;
+        writer.WriteGeneralizedTime(
+            new DateTimeOffset(utc.Year, utc.Month, utc.Day, utc.Hour, utc.Minute, utc.Second, TimeSpan.Zero),
+            omitFractionalSeconds: true);
+    }
+
     /// <summary>
     /// <c>AsnWriter.WriteIntegerUnsigned</c> requires minimal big-endian input;
     /// this trims redundant leading zero octets (keeping one for the value zero).
