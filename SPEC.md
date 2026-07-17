@@ -97,10 +97,14 @@ public sealed class Pkcs11Options
   `CK_MECHANISM_INFO`, `CK_DATE`, token/slot info, function list) plus the
   crypto-relevant mechanism params (`CK_RSA_PKCS_PSS_PARAMS`,
   `CK_RSA_PKCS_OAEP_PARAMS`, `CK_ECDH1_DERIVE_PARAMS`).
-- **Deliberately omitted** (add on demand): ~53 legacy protocol param structs
-  (SSL3/TLS/WTLS key material, OTP, RC2/RC5/SKIPJACK/KEA/SEED/CAMELLIA/ARIA/
-  GOST, PBE/PBKD2, X9.42/ECMQV/ECDH2) — untestable against SoftHSM and out of
-  CA scope.
+- **Deliberately omitted — leave until a concrete need shows up** (decision
+  2026-07-17): the remaining 53 mechanism-param structs. Mostly legacy protocol
+  baggage (SSL3/TLS12/WTLS key material, OTP, RC2/RC5/DES/SKIPJACK, GOST/SEED/
+  CAMELLIA/ARIA, PBE/PBKD2, X9.42/ECMQV/ECDH2, KEA, KIP, CMS_SIG,
+  KEY_WRAP_SET_OAEP) plus a few modern-but-out-of-scope ones. Do NOT add
+  speculatively. Plausible first additions if a need arises:
+  `CK_AES_GCM_PARAMS` (HSM symmetric encryption), AES key-wrap params /
+  `CK_RSA_AES_KEY_WRAP_PARAMS` (key backup/escrow).
 - `StructLayoutTests` locks every marshalled struct to its LP64 size; the
   Windows port must revisit these together with `NativeULong`/packing (SPEC #4).
 
