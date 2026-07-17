@@ -40,6 +40,40 @@ public sealed class SubjectPublicKeyInfo
     public static SubjectPublicKeyInfo FromEc(string namedCurveOid, byte[] uncompressedPoint) =>
         new(Oids.EcPublicKey, namedCurveOid, uncompressedPoint);
 
+    public static SubjectPublicKeyInfo Decode(byte[] der)
+    {
+        var reader = new AsnReader(der, AsnEncodingRules.DER);
+        var spki = reader.ReadSequence();
+        reader.ThrowIfNotEmpty();
+
+        var algorithm = spki.ReadSequence();
+        var algorithmOid = algorithm.ReadObjectIdentifier();
+
+        string? namedCurveOid = null;
+        switch (algorithmOid)
+        {
+            case Oids.RsaEncryption:
+                if (algorithm.HasData)
+                {
+                    algorithm.ReadNull();
+                }
+                break;
+            case Oids.EcPublicKey:
+                namedCurveOid = algorithm.ReadObjectIdentifier();
+                break;
+            default:
+                throw new NotSupportedException($"Unsupported public key algorithm OID {algorithmOid}.");
+        }
+
+        algorithm.ThrowIfNotEmpty();
+        var keyBits = spki.ReadBitString(out var unusedBits);
+        spki.ThrowIfNotEmpty();
+
+        return unusedBits == 0
+            ? new SubjectPublicKeyInfo(algorithmOid, namedCurveOid, keyBits)
+            : throw new NotSupportedException("subjectPublicKey BIT STRING with unused bits is not supported.");
+    }
+
     /// <summary>RFC 5280 §4.2.1.2 method 1: SHA-1 over the subjectPublicKey bits.</summary>
     public byte[] ComputeKeyIdentifier() => SHA1.HashData(PublicKeyBytes);
 

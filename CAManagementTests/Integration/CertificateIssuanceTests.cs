@@ -73,4 +73,63 @@ public sealed class CertificateIssuanceTests(SoftHsmFixture fixture)
         Assert.True(CertificateBuilderTests.ChainValidates(leafCertificate, caCertificate),
             "HSM-issued leaf must chain to the HSM-backed CA root");
     }
+
+    [Fact]
+    public void Hsm_backed_ca_issues_from_a_pkcs10_request()
+    {
+        using var library = new Pkcs11Library(fixture.CreateOptions());
+        using var session = library.OpenSession();
+        using var _ = session.Login(SoftHsmFixture.UserPin);
+
+        var caLabel = $"csr-ca-{Guid.NewGuid():N}";
+        var (caPublicKey, caPrivateKey) = session.GenerateEcKeyPair(caLabel);
+        var caSpki = Pkcs11PublicKeyReader.Read(session, caPublicKey);
+        var caSigner = new Pkcs11CertificateSigner(session, caPrivateKey, SignatureAlgorithm.EcdsaWithSha256);
+        var caName = DistinguishedName.Builder().Country("CH").CommonName($"CSR HSM CA {caLabel}").Build();
+
+        var caDer = new CertificateBuilder
+        {
+            Subject = caName,
+            SubjectPublicKeyInfo = caSpki,
+            NotBefore = DateTimeOffset.UtcNow.AddHours(-1),
+            NotAfter = DateTimeOffset.UtcNow.AddYears(1),
+            Extensions =
+            [
+                CertificateExtensions.BasicConstraints(isCa: true, pathLengthConstraint: 0),
+                CertificateExtensions.KeyUsage(KeyUsages.KeyCertSign | KeyUsages.CrlSign),
+                CertificateExtensions.SubjectKeyIdentifier(caSpki.ComputeKeyIdentifier()),
+            ],
+        }.SignSelfSigned(caSigner);
+
+        // A requester (software key, e.g. a server) submits a PKCS#10 request.
+        using var requesterKey = System.Security.Cryptography.ECDsa.Create(
+            System.Security.Cryptography.ECCurve.NamedCurves.nistP256);
+        var csrDer = new System.Security.Cryptography.X509Certificates.CertificateRequest(
+                new X500DistinguishedName("CN=csr.example.test"), requesterKey,
+                System.Security.Cryptography.HashAlgorithmName.SHA256)
+            .CreateSigningRequest();
+
+        var csr = CertificateSigningRequest.Decode(csrDer);
+
+        var leafDer = new CertificateBuilder
+        {
+            Subject = csr.Subject,
+            SubjectPublicKeyInfo = csr.SubjectPublicKeyInfo,
+            NotBefore = DateTimeOffset.UtcNow.AddHours(-1),
+            NotAfter = DateTimeOffset.UtcNow.AddMonths(3),
+            Extensions =
+            [
+                CertificateExtensions.BasicConstraints(isCa: false),
+                CertificateExtensions.KeyUsage(KeyUsages.DigitalSignature),
+                CertificateExtensions.AuthorityKeyIdentifier(caSpki.ComputeKeyIdentifier()),
+            ],
+        }.Sign(caName, caSigner);
+
+        using var caCertificate = X509CertificateLoader.LoadCertificate(caDer);
+        using var leafCertificate = X509CertificateLoader.LoadCertificate(leafDer);
+
+        Assert.Contains("CN=csr.example.test", leafCertificate.Subject);
+        Assert.True(CertificateBuilderTests.ChainValidates(leafCertificate, caCertificate),
+            "certificate issued from a CSR must chain to the HSM-backed CA");
+    }
 }

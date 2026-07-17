@@ -20,6 +20,9 @@ public static class Oids
     public const string Secp384R1 = "1.3.132.0.34";
     public const string Secp521R1 = "1.3.132.0.35";
 
+    // PKCS#9 attributes
+    public const string ExtensionRequest = "1.2.840.113549.1.9.14";
+
     // X.500 attribute types
     public const string CommonName = "2.5.4.3";
     public const string SerialNumberAttribute = "2.5.4.5";

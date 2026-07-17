@@ -17,7 +17,7 @@ public sealed class Pkcs11CertificateSigner(
     {
         var rawSignature = session.Sign(MechanismFor(signatureAlgorithm), data, privateKeyHandle);
 
-        return IsEcdsa(signatureAlgorithm)
+        return signatureAlgorithm.IsEcdsa()
             ? EcdsaSignatureConverter.RawToDer(rawSignature)
             : rawSignature;
     }
@@ -32,7 +32,4 @@ public sealed class Pkcs11CertificateSigner(
         SignatureAlgorithm.EcdsaWithSha512 => CK_MECHANISM_TYPE.CKM_ECDSA_SHA512,
         _ => throw new ArgumentOutOfRangeException(nameof(algorithm), algorithm, "Unsupported signature algorithm."),
     };
-
-    private static bool IsEcdsa(SignatureAlgorithm algorithm) => algorithm is
-        SignatureAlgorithm.EcdsaWithSha256 or SignatureAlgorithm.EcdsaWithSha384 or SignatureAlgorithm.EcdsaWithSha512;
 }
