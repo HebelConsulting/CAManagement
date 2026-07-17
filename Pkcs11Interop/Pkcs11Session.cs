@@ -92,6 +92,26 @@ public sealed class Pkcs11Session : IDisposable
         return _library.GenerateKeyPair(Handle, mechanism, publicTemplate, privateTemplate);
     }
 
+    /// <summary>Reads a single attribute's raw value from an object.</summary>
+    public byte[] GetAttributeValue(NativeULong objectHandle, CK_ATTRIBUTE_TYPE type) =>
+        _library.GetAttributeValue(Handle, objectHandle, type);
+
+    public string GetLabel(NativeULong objectHandle) =>
+        System.Text.Encoding.UTF8.GetString(GetAttributeValue(objectHandle, CKA_LABEL));
+
+    public CK_OBJECT_CLASS GetObjectClass(NativeULong objectHandle) =>
+        (CK_OBJECT_CLASS)ToNativeULong(GetAttributeValue(objectHandle, CKA_CLASS));
+
+    public CK_KEY_TYPE GetKeyType(NativeULong objectHandle) =>
+        (CK_KEY_TYPE)ToNativeULong(GetAttributeValue(objectHandle, CKA_KEY_TYPE));
+
+    // CK_ULONG-valued attributes carry NativeULong-width little-endian bytes.
+    private static NativeULong ToNativeULong(byte[] value) => value.Length switch
+    {
+        sizeof(NativeULong) => BitConverter.ToUInt64(value),
+        _ => throw new InvalidOperationException($"Expected a {sizeof(NativeULong)}-byte CK_ULONG value but got {value.Length} bytes."),
+    };
+
     public IReadOnlyList<NativeULong> FindObjects(CK_OBJECT_CLASS objectClass, CK_KEY_TYPE keyType)
     {
         using var scope = new NativeAllocationScope();

@@ -75,6 +75,57 @@ public sealed class Pkcs11IntegrationTests(SoftHsmFixture fixture)
     }
 
     [Fact]
+    public void Reads_back_attributes_of_a_generated_rsa_keypair()
+    {
+        using var library = new Pkcs11Library(fixture.CreateOptions());
+        using var session = library.OpenSession();
+        using var _ = session.Login(SoftHsmFixture.UserPin);
+
+        var label = $"attr-{Guid.NewGuid():N}";
+        var (publicKey, privateKey) = session.GenerateRsaKeyPair(label);
+
+        Assert.Equal(label, session.GetLabel(publicKey));
+        Assert.Equal(label, session.GetLabel(privateKey));
+        Assert.Equal(CK_OBJECT_CLASS.CKO_PUBLIC_KEY, session.GetObjectClass(publicKey));
+        Assert.Equal(CK_OBJECT_CLASS.CKO_PRIVATE_KEY, session.GetObjectClass(privateKey));
+        Assert.Equal(CK_KEY_TYPE.CKK_RSA, session.GetKeyType(publicKey));
+
+        var modulus = session.GetAttributeValue(publicKey, CK_ATTRIBUTE_TYPE.CKA_MODULUS);
+        Assert.Equal(256, modulus.Length); // 2048-bit default
+    }
+
+    [Fact]
+    public void Reads_back_ec_point_of_a_generated_ec_keypair()
+    {
+        using var library = new Pkcs11Library(fixture.CreateOptions());
+        using var session = library.OpenSession();
+        using var _ = session.Login(SoftHsmFixture.UserPin);
+
+        var (publicKey, _2) = session.GenerateEcKeyPair($"ecattr-{Guid.NewGuid():N}");
+
+        var ecPoint = session.GetAttributeValue(publicKey, CK_ATTRIBUTE_TYPE.CKA_EC_POINT);
+
+        // DER octet string wrapping an uncompressed P-256 point: 04 41 04 || X(32) || Y(32).
+        Assert.Equal(67, ecPoint.Length);
+        Assert.Equal(0x04, ecPoint[0]);
+    }
+
+    [Fact]
+    public void Reading_a_sensitive_attribute_throws_pkcs11_exception()
+    {
+        using var library = new Pkcs11Library(fixture.CreateOptions());
+        using var session = library.OpenSession();
+        using var _ = session.Login(SoftHsmFixture.UserPin);
+
+        var (_1, privateKey) = session.GenerateRsaKeyPair($"sens-{Guid.NewGuid():N}");
+
+        var exception = Assert.Throws<Pkcs11Exception>(
+            () => session.GetAttributeValue(privateKey, CK_ATTRIBUTE_TYPE.CKA_PRIVATE_EXPONENT));
+
+        Assert.Equal(CK_RV.CKR_ATTRIBUTE_SENSITIVE, exception.ReturnValue);
+    }
+
+    [Fact]
     public void Login_with_wrong_pin_throws_pkcs11_exception()
     {
         using var library = new Pkcs11Library(fixture.CreateOptions());

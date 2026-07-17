@@ -45,6 +45,9 @@ public sealed partial class Pkcs11Library
         out NativeULong publicKey, out NativeULong privateKey);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate CK_RV CkGetAttributeValueDelegate(NativeULong session, NativeULong objectHandle, [In, Out] CK_ATTRIBUTE[] template, NativeULong count);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate CK_RV CkFindObjectsInitDelegate(NativeULong session, [In] CK_ATTRIBUTE[] template, NativeULong count);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -70,6 +73,7 @@ public sealed partial class Pkcs11Library
     private CkLoginDelegate _cLogin = null!;
     private CkSessionHandleDelegate _cLogout = null!;
     private CkGenerateKeyPairDelegate _cGenerateKeyPair = null!;
+    private CkGetAttributeValueDelegate _cGetAttributeValue = null!;
     private CkFindObjectsInitDelegate _cFindObjectsInit = null!;
     private CkFindObjectsDelegate _cFindObjects = null!;
     private CkSessionHandleDelegate _cFindObjectsFinal = null!;
@@ -91,6 +95,7 @@ public sealed partial class Pkcs11Library
         _cLogin = Bind<CkLoginDelegate>(_functions.C_Login, nameof(_functions.C_Login));
         _cLogout = Bind<CkSessionHandleDelegate>(_functions.C_Logout, nameof(_functions.C_Logout));
         _cGenerateKeyPair = Bind<CkGenerateKeyPairDelegate>(_functions.C_GenerateKeyPair, nameof(_functions.C_GenerateKeyPair));
+        _cGetAttributeValue = Bind<CkGetAttributeValueDelegate>(_functions.C_GetAttributeValue, nameof(_functions.C_GetAttributeValue));
         _cFindObjectsInit = Bind<CkFindObjectsInitDelegate>(_functions.C_FindObjectsInit, nameof(_functions.C_FindObjectsInit));
         _cFindObjects = Bind<CkFindObjectsDelegate>(_functions.C_FindObjects, nameof(_functions.C_FindObjects));
         _cFindObjectsFinal = Bind<CkSessionHandleDelegate>(_functions.C_FindObjectsFinal, nameof(_functions.C_FindObjectsFinal));
@@ -165,6 +170,25 @@ public sealed partial class Pkcs11Library
             "C_GenerateKeyPair");
 
         return (publicKey, privateKey);
+    }
+
+    internal byte[] GetAttributeValue(NativeULong session, NativeULong objectHandle, CK_ATTRIBUTE_TYPE type)
+    {
+        // Two-phase read (PKCS#11 2.40 §5.7.5): probe with a null value pointer to
+        // learn the size, then allocate and fetch. Sensitive/invalid attributes
+        // return CKR_ATTRIBUTE_SENSITIVE / CKR_ATTRIBUTE_TYPE_INVALID and throw.
+        var template = new[] { new CK_ATTRIBUTE { Type = type } };
+        CheckRv(_cGetAttributeValue(session, objectHandle, template, 1), "C_GetAttributeValue");
+
+        using var scope = new NativeAllocationScope();
+        var length = (int)template[0].ValueLength;
+        template[0].Value = scope.Allocate(new byte[length]);
+        CheckRv(_cGetAttributeValue(session, objectHandle, template, 1), "C_GetAttributeValue");
+
+        var value = new byte[(int)template[0].ValueLength];
+        Marshal.Copy(template[0].Value, value, 0, value.Length);
+
+        return value;
     }
 
     internal NativeULong[] FindObjects(NativeULong session, CK_ATTRIBUTE[] template, int maxCount)
