@@ -130,7 +130,7 @@ public sealed class Pkcs11Options
 | D3 | Layout | **Split**: `CertificateAuthority` (pure, no Pkcs11Interop reference, exposes `ICertificateSigner`) + `Pkcs11Signing` adapter (references both; owns the ECDSA raw r&#124;&#124;s → DER conversion). |
 | D4 | Scope | v1 ✅ + v2 ✅ (2026-07-17): Name/AlgId/OIDs/SPKI/TBS + core extensions, self-signed CA + issue cert, PKCS#10 CSR intake (PoP verified in Decode), CRL building (CRLNumber/AKI/reasonCode). v3: OCSP, chain helpers — not started without a go. |
 | D5 | CA state | v1 **stateless** (caller supplies serial/validity; random 16-byte serials by default). State design deferred to the CRL phase. |
-| D6 | Testing | Unit: DER golden vectors, `AsnReader` round trips, software-key signing. Integration: HSM-key CA issues certs validated by `X509Certificate2`/`X509Chain`. |
+| D6 | Testing | Unit: DER golden vectors, `AsnReader` round trips, software-key signing. Integration: HSM-key CA issues certs validated by `X509Certificate2`/`X509Chain`; CRLs cross-checked by framework `Load`, manual signature verify, and openssl. CLI: `ConsoleEndToEndTests` builds the caconsole binary and drives init-ca → issue → revoke → gen-crl → asn as child processes against a throwaway token. |
 
 ## Future
 - Windows support (activates the #4 platform switches).
