@@ -42,8 +42,7 @@ public sealed class IssueCommand(HsmCa hsm) : Command<IssueCommand.Settings>
         var session = hsm.OpenLoggedInSession(settings.Pin);
         var (signer, caSpki) = hsm.LoadCaKey(session, settings.CaLabel);
 
-        using var caCertificate = X509CertificateLoader.LoadCertificate(ReadDer(settings.CaCert));
-        var issuer = DistinguishedName.Decode(caCertificate.SubjectName.RawData);
+        var issuer = X509Names.SubjectOf(File.ReadAllBytes(settings.CaCert));
 
         var csr = CertificateSigningRequest.Decode(ReadDer(settings.Csr)); // verifies proof of possession
 

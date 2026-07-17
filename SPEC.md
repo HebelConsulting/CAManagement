@@ -115,6 +115,19 @@ public sealed class Pkcs11Options
   arm64 `libsofthsm2.so`. `caconsole info` needs an initialized token in the
   active `SOFTHSM2_CONF`; the default config reports `CKR_TOKEN_NOT_RECOGNIZED`.
 
+## Distinguished names (added 2026-07-17)
+- `DistinguishedName.Parse` accepts the OpenSSL slash form (`/C=CH/O=…/CN=…`,
+  `\/`-escaping) and the comma form; values may carry a string-type annotation
+  prefix (`CN=[PrintableString]name`, hyphenated spellings accepted). The
+  bracket-prefix syntax was chosen over a `value@Type` suffix because `@`
+  legitimately occurs in emailAddress values.
+- Decoded components remember their original string types, so
+  Decode→Encode is byte-faithful for foreign encodings (e.g. framework/openssl
+  PrintableString CNs) — required when extracting a CA subject as CRL issuer.
+- `X509Names.SubjectOf`/`IssuerOf` extract names from certificate/CSR/CRL
+  (PEM or DER) without signature verification; the console's issue/gen-crl use
+  them.
+
 ## Conventions
 - String **interpolation** over `+` concatenation.
 - Prefer **switch expressions** (lambda notation).

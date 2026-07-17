@@ -10,25 +10,34 @@ namespace CertificateAuthority;
 /// </summary>
 public sealed class DistinguishedName
 {
-    private readonly IReadOnlyList<(string Oid, string Value)> _components;
+    private readonly IReadOnlyList<DistinguishedNameComponent> _components;
 
-    internal DistinguishedName(IReadOnlyList<(string Oid, string Value)> components) =>
+    internal DistinguishedName(IReadOnlyList<DistinguishedNameComponent> components) =>
         _components = components;
 
-    public IReadOnlyList<(string Oid, string Value)> Components => _components;
+    public IReadOnlyList<DistinguishedNameComponent> Components => _components;
 
     public static DistinguishedNameBuilder Builder() => new();
+
+    /// <summary>
+    /// Parses a DN string: OpenSSL slash form ("/C=CH/O=Example/CN=name", escapes
+    /// \/ and \\) when starting with '/', otherwise comma form ("C=CH, O=Example,
+    /// CN=name"). Values may carry a string-type annotation prefix, e.g.
+    /// "CN=[PrintableString]www.test.org" ("UTF8-String" spelling accepted).
+    /// Components are encoded in the given order.
+    /// </summary>
+    public static DistinguishedName Parse(string text) => DistinguishedNameParser.Parse(text);
 
     public void Encode(AsnWriter writer)
     {
         writer.PushSequence();
 
-        foreach (var (oid, value) in _components)
+        foreach (var component in _components)
         {
             writer.PushSetOf();
             writer.PushSequence();
-            writer.WriteObjectIdentifier(oid);
-            writer.WriteCharacterString(StringTypeFor(oid), value);
+            writer.WriteObjectIdentifier(component.Oid);
+            writer.WriteCharacterString(component.StringType ?? StringTypeFor(component.Oid), component.Value);
             writer.PopSequence();
             writer.PopSetOf();
         }
@@ -54,7 +63,7 @@ public sealed class DistinguishedName
 
     internal static DistinguishedName Decode(AsnReader reader)
     {
-        var components = new List<(string Oid, string Value)>();
+        var components = new List<DistinguishedNameComponent>();
         var sequence = reader.ReadSequence();
 
         while (sequence.HasData)
@@ -62,19 +71,22 @@ public sealed class DistinguishedName
             var set = sequence.ReadSetOf();
             var attribute = set.ReadSequence();
             var oid = attribute.ReadObjectIdentifier();
-            var tag = attribute.PeekTag();
-            var value = attribute.ReadCharacterString((UniversalTagNumber)tag.TagValue);
+            var stringType = (UniversalTagNumber)attribute.PeekTag().TagValue;
+            var value = attribute.ReadCharacterString(stringType);
             attribute.ThrowIfNotEmpty();
             set.ThrowIfNotEmpty();
 
-            components.Add((oid, value));
+            // Remember the encoding only when it differs from our default, so
+            // re-encoding is byte-faithful without cluttering the common case.
+            components.Add(new DistinguishedNameComponent(
+                oid, value, stringType == StringTypeFor(oid) ? null : stringType));
         }
 
         return new DistinguishedName(components);
     }
 
     /// <summary>RFC 5280 mandates PrintableString for country; DC and email are IA5; the rest use UTF8String.</summary>
-    private static UniversalTagNumber StringTypeFor(string oid) => oid switch
+    internal static UniversalTagNumber StringTypeFor(string oid) => oid switch
     {
         Oids.Country => UniversalTagNumber.PrintableString,
         Oids.SerialNumberAttribute => UniversalTagNumber.PrintableString,

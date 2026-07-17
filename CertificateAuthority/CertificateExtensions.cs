@@ -77,19 +77,103 @@ public static class CertificateExtensions
         return new CertificateExtension(Oids.ExtendedKeyUsage, Critical: false, writer.Encode());
     }
 
-    public static CertificateExtension SubjectAlternativeDnsNames(params string[] dnsNames)
+    public static CertificateExtension SubjectAlternativeDnsNames(params string[] dnsNames) =>
+        SubjectAlternativeName(dnsNames.Select(GeneralName.Dns).ToArray());
+
+    public static CertificateExtension SubjectAlternativeName(params GeneralName[] names) =>
+        new(Oids.SubjectAlternativeName, Critical: false, EncodeGeneralNames(names));
+
+    public static CertificateExtension IssuerAlternativeName(params GeneralName[] names) =>
+        new(Oids.IssuerAlternativeName, Critical: false, EncodeGeneralNames(names));
+
+    /// <summary>One DistributionPoint whose fullName lists the given URIs (RFC 5280 §4.2.1.13).</summary>
+    public static CertificateExtension CrlDistributionPoints(params string[] uris)
     {
         var writer = new AsnWriter(AsnEncodingRules.DER);
         writer.PushSequence();
 
-        foreach (var dnsName in dnsNames)
+        writer.PushSequence(); // DistributionPoint
+        var distributionPointTag = new Asn1Tag(TagClass.ContextSpecific, 0);
+        writer.PushSequence(distributionPointTag); // distributionPoint [0]
+        var fullNameTag = new Asn1Tag(TagClass.ContextSpecific, 0);
+        writer.PushSequence(fullNameTag); // fullName [0] GeneralNames
+
+        foreach (var uri in uris)
         {
-            // GeneralName dNSName [2] IMPLICIT IA5String
-            writer.WriteCharacterString(UniversalTagNumber.IA5String, dnsName, new Asn1Tag(TagClass.ContextSpecific, 2));
+            GeneralName.Uri(uri).Encode(writer);
+        }
+
+        writer.PopSequence(fullNameTag);
+        writer.PopSequence(distributionPointTag);
+        writer.PopSequence();
+
+        writer.PopSequence();
+
+        return new CertificateExtension(Oids.CrlDistributionPoints, Critical: false, writer.Encode());
+    }
+
+    /// <summary>authorityInfoAccess with OCSP and/or caIssuers URIs (RFC 5280 §4.2.2.1).</summary>
+    public static CertificateExtension AuthorityInfoAccess(string? ocspUri = null, string? caIssuersUri = null)
+    {
+        if (ocspUri is null && caIssuersUri is null)
+        {
+            throw new ArgumentException("At least one of ocspUri and caIssuersUri is required.");
+        }
+
+        var writer = new AsnWriter(AsnEncodingRules.DER);
+        writer.PushSequence();
+
+        WriteAccessDescription(writer, Oids.AccessMethodOcsp, ocspUri);
+        WriteAccessDescription(writer, Oids.AccessMethodCaIssuers, caIssuersUri);
+
+        writer.PopSequence();
+
+        return new CertificateExtension(Oids.AuthorityInfoAccess, Critical: false, writer.Encode());
+    }
+
+    /// <summary>certificatePolicies listing plain policy OIDs (no qualifiers).</summary>
+    public static CertificateExtension CertificatePolicies(params string[] policyOids)
+    {
+        var writer = new AsnWriter(AsnEncodingRules.DER);
+        writer.PushSequence();
+
+        foreach (var policyOid in policyOids)
+        {
+            writer.PushSequence();
+            writer.WriteObjectIdentifier(policyOid);
+            writer.PopSequence();
         }
 
         writer.PopSequence();
 
-        return new CertificateExtension(Oids.SubjectAlternativeName, Critical: false, writer.Encode());
+        return new CertificateExtension(Oids.CertificatePolicies, Critical: false, writer.Encode());
+    }
+
+    private static void WriteAccessDescription(AsnWriter writer, string accessMethodOid, string? uri)
+    {
+        if (uri is null)
+        {
+            return;
+        }
+
+        writer.PushSequence();
+        writer.WriteObjectIdentifier(accessMethodOid);
+        GeneralName.Uri(uri).Encode(writer);
+        writer.PopSequence();
+    }
+
+    private static byte[] EncodeGeneralNames(IReadOnlyList<GeneralName> names)
+    {
+        var writer = new AsnWriter(AsnEncodingRules.DER);
+        writer.PushSequence();
+
+        foreach (var name in names)
+        {
+            name.Encode(writer);
+        }
+
+        writer.PopSequence();
+
+        return writer.Encode();
     }
 }

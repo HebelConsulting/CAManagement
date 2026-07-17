@@ -23,6 +23,9 @@ public sealed class CrlBuilder
 
     public IReadOnlyList<RevokedCertificate> RevokedCertificates { get; init; } = [];
 
+    /// <summary>Extra crlExtensions appended after CRLNumber and AKI.</summary>
+    public IReadOnlyList<CertificateExtension> AdditionalExtensions { get; init; } = [];
+
     public byte[] Sign(ICertificateSigner signer)
     {
         if (NextUpdate is { } nextUpdate && nextUpdate <= ThisUpdate)
@@ -81,6 +84,11 @@ public sealed class CrlBuilder
         if (AuthorityKeyIdentifier is { } keyIdentifier)
         {
             CertificateExtensions.AuthorityKeyIdentifier(keyIdentifier).Encode(writer);
+        }
+
+        foreach (var extension in AdditionalExtensions)
+        {
+            extension.Encode(writer);
         }
 
         writer.PopSequence();

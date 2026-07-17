@@ -1,9 +1,11 @@
+using System.Formats.Asn1;
+
 namespace CertificateAuthority;
 
 /// <summary>Builds a <see cref="DistinguishedName"/>; add the most significant component first.</summary>
 public sealed class DistinguishedNameBuilder
 {
-    private readonly List<(string Oid, string Value)> _components = [];
+    private readonly List<DistinguishedNameComponent> _components = [];
 
     public DistinguishedNameBuilder Country(string value) => Add(Oids.Country, ValidatedCountry(value));
 
@@ -17,14 +19,14 @@ public sealed class DistinguishedNameBuilder
 
     public DistinguishedNameBuilder CommonName(string value) => Add(Oids.CommonName, value);
 
-    public DistinguishedNameBuilder Add(string oid, string value)
+    public DistinguishedNameBuilder Add(string oid, string value, UniversalTagNumber? stringType = null)
     {
         if (string.IsNullOrEmpty(value))
         {
             throw new ArgumentException($"Attribute {oid} must not be empty.", nameof(value));
         }
 
-        _components.Add((oid, value));
+        _components.Add(new DistinguishedNameComponent(oid, value, stringType));
         return this;
     }
 

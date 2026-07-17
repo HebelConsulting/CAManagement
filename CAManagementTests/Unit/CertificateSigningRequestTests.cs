@@ -30,7 +30,7 @@ public sealed class CertificateSigningRequestTests
         var csr = CertificateSigningRequest.Decode(CreateRsaCsr(key));
 
         Assert.Equal(SignatureAlgorithm.Sha256WithRsa, csr.SignatureAlgorithm);
-        Assert.Contains((Oids.CommonName, "Requester"), csr.Subject.Components);
+        Assert.Contains(csr.Subject.Components, c => c is { Oid: Oids.CommonName, Value: "Requester" });
         Assert.Equal(key.ExportSubjectPublicKeyInfo(), csr.SubjectPublicKeyInfo.Encode());
         Assert.Empty(csr.RequestedExtensions);
     }

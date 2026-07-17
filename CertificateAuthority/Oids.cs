@@ -54,10 +54,17 @@ public static class Oids
     public const string OcspBasicResponse = "1.3.6.1.5.5.7.48.1.1";
     public const string OcspNonce = "1.3.6.1.5.5.7.48.1.2";
 
+    // Authority information access methods (RFC 5280 §4.2.2.1)
+    public const string AuthorityInfoAccess = "1.3.6.1.5.5.7.1.1";
+    public const string AccessMethodOcsp = "1.3.6.1.5.5.7.48.1";
+    public const string AccessMethodCaIssuers = "1.3.6.1.5.5.7.48.2";
+
     // Certificate extensions
     public const string SubjectKeyIdentifier = "2.5.29.14";
     public const string KeyUsage = "2.5.29.15";
     public const string SubjectAlternativeName = "2.5.29.17";
+    public const string IssuerAlternativeName = "2.5.29.18";
+    public const string CertificatePolicies = "2.5.29.32";
     public const string BasicConstraints = "2.5.29.19";
     public const string CrlNumber = "2.5.29.20";
     public const string CrlReasonCode = "2.5.29.21";

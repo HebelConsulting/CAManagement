@@ -43,8 +43,8 @@ public sealed class GenCrlCommand(HsmCa hsm) : Command<GenCrlCommand.Settings>
         var session = hsm.OpenLoggedInSession(settings.Pin);
         var (signer, caSpki) = hsm.LoadCaKey(session, settings.CaLabel);
 
-        using var caCertificate = X509CertificateLoader.LoadCertificate(IssueCommand.ReadDer(settings.CaCert));
-        var issuer = DistinguishedName.Decode(caCertificate.SubjectName.RawData);
+        // The CRL issuer is the CA certificate's subject (byte-faithful extraction).
+        var issuer = X509Names.SubjectOf(File.ReadAllBytes(settings.CaCert));
 
         var state = CaStateFile.Load(settings.State);
         state.CrlNumber++;
