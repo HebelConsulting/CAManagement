@@ -15,7 +15,7 @@ public sealed class InfoCommand(Pkcs11Library library) : Command<InfoCommand.Set
         public bool ReadWrite { get; init; }
     }
 
-    public override int Execute(CommandContext context, Settings settings)
+    protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         AnsiConsole.MarkupLine($"[green]Loaded PKCS#11 module[/] (Cryptoki {library.CryptokiVersion}).");
 

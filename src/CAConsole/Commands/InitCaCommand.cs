@@ -37,7 +37,7 @@ public sealed class InitCaCommand(HsmCa hsm) : Command<InitCaCommand.Settings>
         public string? Pin { get; init; }
     }
 
-    public override int Execute(CommandContext context, Settings settings)
+    protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         using var hsmScope = hsm;
         var session = hsm.OpenLoggedInSession(settings.Pin);

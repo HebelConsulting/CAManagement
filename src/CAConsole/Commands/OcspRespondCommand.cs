@@ -70,7 +70,7 @@ public sealed class OcspRespondCommand(HsmCa hsm) : Command<OcspRespondCommand.S
         }
     }
 
-    public override int Execute(CommandContext context, Settings settings)
+    protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         using var hsmScope = hsm;
         var session = hsm.OpenLoggedInSession(settings.Pin);

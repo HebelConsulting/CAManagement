@@ -37,7 +37,7 @@ public sealed class GenCrlCommand(HsmCa hsm) : Command<GenCrlCommand.Settings>
         public string? Pin { get; init; }
     }
 
-    public override int Execute(CommandContext context, Settings settings)
+    protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         using var _ = hsm;
         var session = hsm.OpenLoggedInSession(settings.Pin);

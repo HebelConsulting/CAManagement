@@ -81,6 +81,8 @@ public static class Asn1Analyzer
             case DocumentKind.EcPrivateKey: AnnotateEcPrivateKey(root); break;
             case DocumentKind.Pkcs12: AnnotatePfx(root); break;
             case DocumentKind.Cms: AnnotateContentInfo(root, "ContentInfo", "CMS/PKCS#7 content envelope (RFC 5652)"); break;
+            case DocumentKind.OcspRequest: AnnotateOcspRequest(root); break;
+            case DocumentKind.OcspResponse: AnnotateOcspResponse(root); break;
         }
 
         return new AnalyzedDocument(kind, root);
@@ -98,6 +100,8 @@ public static class Asn1Analyzer
         "EC PRIVATE KEY" => DocumentKind.EcPrivateKey,
         "PKCS7" or "CMS" => DocumentKind.Cms,
         "PKCS12" => DocumentKind.Pkcs12,
+        "OCSP REQUEST" => DocumentKind.OcspRequest,
+        "OCSP RESPONSE" => DocumentKind.OcspResponse,
         _ => DocumentKind.Unknown,
     };
 
@@ -123,6 +127,8 @@ public static class Asn1Analyzer
             _ when IsPkcs8Shape(c) => DocumentKind.Pkcs8PrivateKey,
             _ when IsRsaPrivateKeyShape(c) => DocumentKind.RsaPrivateKey,
             _ when IsEcPrivateKeyShape(c) => DocumentKind.EcPrivateKey,
+            _ when IsOcspResponseShape(c) => DocumentKind.OcspResponse,
+            _ when IsOcspRequestShape(c) => DocumentKind.OcspRequest,
             _ => DocumentKind.Unknown,
         };
     }
@@ -719,5 +725,213 @@ public static class Asn1Analyzer
         }
         if (c.Count > 1) Label(c[1], "macSalt", "Salt for the MAC key derivation");
         if (c.Count > 2) Label(c[2], "iterations", "MAC key derivation iterations");
+    }
+
+    // --- OCSP (RFC 6960) ------------------------------------------------------
+
+    private static bool IsOcspResponseShape(IReadOnlyList<Asn1Node> c) =>
+        c.Count is 1 or 2
+        && c[0].TagName == "ENUMERATED"
+        && (c.Count == 1 || c[1].TagName == "[0]");
+
+    private static bool IsOcspRequestShape(IReadOnlyList<Asn1Node> c) =>
+        c.Count is 1 or 2
+        && c[0].TagName == "SEQUENCE"
+        && (c.Count == 1 || c[1].TagName == "[0]")
+        && FindRequestList(c[0]) is not null;
+
+    private static Asn1Node? FindRequestList(Asn1Node tbsRequest) =>
+        tbsRequest.Children.FirstOrDefault(child => child.TagName == "SEQUENCE"
+            && child.Children.Count > 0
+            && child.Children.All(request => request.TagName == "SEQUENCE"
+                && request.Children.FirstOrDefault() is { } certId && IsCertIdShape(certId)));
+
+    private static bool IsCertIdShape(Asn1Node node) =>
+        node is { TagName: "SEQUENCE", Children.Count: 4 }
+        && node.Children[0].TagName == "SEQUENCE"
+        && node.Children[1].TagName == "OCTET STRING"
+        && node.Children[2].TagName == "OCTET STRING"
+        && node.Children[3].TagName == "INTEGER";
+
+    private static void AnnotateCertId(Asn1Node node)
+    {
+        Label(node, "CertID", "Identifies one certificate towards the responder");
+
+        if (!IsCertIdShape(node))
+        {
+            return;
+        }
+
+        AnnotateAlgorithm(node.Children[0], "hashAlgorithm", "Hash used for the issuer hashes below");
+        Label(node.Children[1], "issuerNameHash", "Hash of the issuer's DER-encoded name");
+        Label(node.Children[2], "issuerKeyHash", "Hash of the issuer's public key bits");
+        Label(node.Children[3], "serialNumber", "Serial of the certificate in question");
+    }
+
+    private static void AnnotateOcspRequest(Asn1Node root)
+    {
+        Label(root, "OCSPRequest", "OCSP status request (RFC 6960)");
+        if (root.Children.Count == 0)
+        {
+            return;
+        }
+
+        var tbsRequest = root.Children[0];
+        Label(tbsRequest, "tbsRequest", "The request content");
+        if (root.Children.Count > 1)
+        {
+            Label(root.Children[1], "optionalSignature", "Optional requester signature");
+        }
+
+        foreach (var child in tbsRequest.Children)
+        {
+            switch (child.TagName)
+            {
+                case "[0]":
+                    Label(child, "version", "OCSP request version (v1 = 0)");
+                    break;
+                case "[1]":
+                    Label(child, "requestorName", "Optional requester identity");
+                    break;
+                case "[2]":
+                    Label(child, "requestExtensions", "Request extensions (e.g. nonce)");
+                    if (child.Children.FirstOrDefault() is { } extensionList)
+                    {
+                        AnnotateExtensions(extensionList);
+                    }
+                    break;
+                case "SEQUENCE":
+                    Label(child, "requestList", "The certificates being asked about");
+                    foreach (var request in child.Children)
+                    {
+                        Label(request, "Request", "One status question");
+                        if (request.Children.Count > 0) AnnotateCertId(request.Children[0]);
+                        if (request.Children.Count > 1) Label(request.Children[1], "singleRequestExtensions", "Per-request extensions");
+                    }
+                    break;
+            }
+        }
+    }
+
+    private static void AnnotateOcspResponse(Asn1Node root)
+    {
+        Label(root, "OCSPResponse", "OCSP response envelope (RFC 6960)");
+        if (root.Children.Count == 0)
+        {
+            return;
+        }
+
+        Label(root.Children[0], "responseStatus", root.Children[0].Value switch
+        {
+            "0" => "successful", "1" => "malformedRequest", "2" => "internalError",
+            "3" => "tryLater", "5" => "sigRequired", "6" => "unauthorized",
+            _ => "unknown status",
+        });
+
+        if (root.Children.Count < 2 || root.Children[1].Children.FirstOrDefault() is not { } responseBytes)
+        {
+            return; // error response: status only
+        }
+
+        Label(root.Children[1], "responseBytes", "The typed response payload");
+        Label(responseBytes, "ResponseBytes", "Response type and DER payload");
+
+        if (responseBytes.Children.Count > 0) Label(responseBytes.Children[0], "responseType", "Payload type OID");
+        if (responseBytes.Children.Count > 1)
+        {
+            Label(responseBytes.Children[1], "response", "DER BasicOCSPResponse (OCTET STRING)");
+            if (responseBytes.Children[1].Children.FirstOrDefault() is { } basicResponse)
+            {
+                AnnotateBasicOcspResponse(basicResponse);
+            }
+        }
+    }
+
+    private static void AnnotateBasicOcspResponse(Asn1Node node)
+    {
+        Label(node, "BasicOCSPResponse", "The signed OCSP payload");
+        var c = node.Children;
+
+        if (c.Count > 0) AnnotateResponseData(c[0]);
+        if (c.Count > 1) AnnotateAlgorithm(c[1], "signatureAlgorithm", "Algorithm the responder used to sign");
+        if (c.Count > 2) Label(c[2], "signature", "Responder's signature over tbsResponseData");
+        if (c.Count > 3 && c[3].TagName == "[0]")
+        {
+            Label(c[3], "certs", "Certificates helping to verify the signature");
+            if (c[3].Children.FirstOrDefault() is { } certificates)
+            {
+                foreach (var certificate in certificates.Children)
+                {
+                    AnnotateCertificate(certificate);
+                }
+            }
+        }
+    }
+
+    private static void AnnotateResponseData(Asn1Node node)
+    {
+        Label(node, "tbsResponseData", "The to-be-signed response content");
+
+        foreach (var child in node.Children)
+        {
+            switch (child.TagName)
+            {
+                case "[0]": Label(child, "version", "Response version (v1 = 0)"); break;
+                case "[1]": Label(child, "responderID", "byName: the responder's distinguished name"); break;
+                case "[2]": Label(child, "responderID", "byKey: SHA-1 of the responder's public key bits"); break;
+                case "GeneralizedTime": Label(child, "producedAt", "When this response was signed"); break;
+                case "SEQUENCE":
+                    Label(child, "responses", "One status per requested certificate");
+                    foreach (var single in child.Children)
+                    {
+                        AnnotateSingleResponse(single);
+                    }
+                    break;
+            }
+        }
+
+        // responseExtensions [1] after the responses SEQUENCE (e.g. the nonce echo)
+        if (node.Children.LastOrDefault() is { TagName: "[1]" } extensions)
+        {
+            Label(extensions, "responseExtensions", "Response extensions (e.g. nonce)");
+            if (extensions.Children.FirstOrDefault() is { } extensionList)
+            {
+                AnnotateExtensions(extensionList);
+            }
+        }
+    }
+
+    private static void AnnotateSingleResponse(Asn1Node node)
+    {
+        Label(node, "SingleResponse", "Status of one certificate");
+        var c = node.Children;
+
+        if (c.Count > 0) AnnotateCertId(c[0]);
+        if (c.Count > 1)
+        {
+            Label(c[1], "certStatus", c[1].TagName switch
+            {
+                "[0]" => "good — not known to be revoked",
+                "[1]" => "revoked (revocationTime, optional reason)",
+                "[2]" => "unknown — the responder cannot vouch for this certificate",
+                _ => "certStatus",
+            });
+
+            if (c[1].TagName == "[1]")
+            {
+                if (c[1].Children.Count > 0) Label(c[1].Children[0], "revocationTime", "When it was revoked");
+                if (c[1].Children.Count > 1) Label(c[1].Children[1], "revocationReason", "CRLReason");
+            }
+        }
+        if (c.Count > 2) Label(c[2], "thisUpdate", "Time this status is known to be correct");
+
+        for (var i = 3; i < c.Count; i++)
+        {
+            switch (c[i].TagName)
+            {
+                case "[0]": Label(c[i], "nextUpdate", "Newer status information will be available by then"); break;
+                case "[1]": Label(c[i], "singleExtensions", "Per-certificate extensions"); break;
+            }
+        }
     }
 }

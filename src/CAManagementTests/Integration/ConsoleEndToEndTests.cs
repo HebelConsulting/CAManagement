@@ -143,13 +143,16 @@ public sealed class ConsoleEndToEndTests
 
     private static string BuildConsole(string repoRoot)
     {
+        // Locate the project by search so repository layout changes don't break us.
+        var csproj = Directory.GetFiles(repoRoot, "CAConsole.csproj", SearchOption.AllDirectories).Single();
+
         // --disable-build-servers: avoid contending for the MSBuild/Roslyn build
         // servers of the outer `dotnet test` session that is running this test.
-        var build = Run("dotnet", ["build", Path.Combine(repoRoot, "CAConsole", "CAConsole.csproj"),
+        var build = Run("dotnet", ["build", csproj,
             "-c", "Debug", "--nologo", "-v", "q", "--disable-build-servers"], repoRoot, []);
         Assert.True(build.ExitCode == 0, $"console build failed: {build.Output}");
 
-        var binary = Path.Combine(repoRoot, "CAConsole", "bin", "Debug", "net10.0", "osx-arm64", "caconsole");
+        var binary = Path.Combine(Path.GetDirectoryName(csproj)!, "bin", "Debug", "net10.0", "osx-arm64", "caconsole");
         Assert.True(File.Exists(binary), $"console binary not found at {binary}");
 
         return binary;

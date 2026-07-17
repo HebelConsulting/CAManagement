@@ -24,7 +24,7 @@ public sealed class RevokeCommand : Command<RevokeCommand.Settings>
         public string State { get; init; } = "ca-state.json";
     }
 
-    public override int Execute(CommandContext context, Settings settings)
+    protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var serial = Convert.FromHexString(settings.Serial.Length % 2 == 0 ? settings.Serial : $"0{settings.Serial}");
         var serialHex = Convert.ToHexString(serial);

@@ -20,7 +20,7 @@ public sealed class AsnCommand : Command<AsnCommand.Settings>
         public int Index { get; init; } = 1;
     }
 
-    public override int Execute(CommandContext context, Settings settings)
+    protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var document = Load(settings);
 

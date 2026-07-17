@@ -12,4 +12,6 @@ public enum DocumentKind
     EcPrivateKey,
     Pkcs12,
     Cms,
+    OcspRequest,
+    OcspResponse,
 }

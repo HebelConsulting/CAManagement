@@ -36,7 +36,7 @@ public sealed class IssueCommand(HsmCa hsm) : Command<IssueCommand.Settings>
         public string? Pin { get; init; }
     }
 
-    public override int Execute(CommandContext context, Settings settings)
+    protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         using var _ = hsm;
         var session = hsm.OpenLoggedInSession(settings.Pin);
