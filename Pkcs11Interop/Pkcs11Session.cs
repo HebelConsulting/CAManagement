@@ -126,8 +126,67 @@ public sealed class Pkcs11Session : IDisposable
             scope.Attribute(CKA_KEY_TYPE, keyType),
         };
 
-        return _library.FindObjects(Handle, template, maxCount: 16);
+        return _library.FindObjects(Handle, template);
     }
+
+    public IReadOnlyList<NativeULong> FindObjects(CK_OBJECT_CLASS objectClass, string label)
+    {
+        using var scope = new NativeAllocationScope();
+
+        var template = new[]
+        {
+            scope.Attribute(CKA_CLASS, objectClass),
+            scope.Attribute(CKA_TOKEN, true),
+            scope.Attribute(CKA_LABEL, label),
+        };
+
+        return _library.FindObjects(Handle, template);
+    }
+
+    /// <summary>
+    /// Imports a DER-encoded X.509 certificate as a token object. The DER subject
+    /// name is passed in by the caller — parsing certificates is the concern of
+    /// the (future) ASN.1/CA library, not of this PKCS#11 layer.
+    /// </summary>
+    public NativeULong ImportX509Certificate(string label, byte[] certificateDer, byte[] subjectDer, byte[]? id = null)
+    {
+        using var scope = new NativeAllocationScope();
+
+        var template = new List<CK_ATTRIBUTE>
+        {
+            scope.Attribute(CKA_CLASS, CKO_CERTIFICATE),
+            scope.Attribute(CKA_CERTIFICATE_TYPE, CK_CERTIFICATE_TYPE.CKC_X_509),
+            scope.Attribute(CKA_TOKEN, true),
+            scope.Attribute(CKA_LABEL, label),
+            scope.Attribute(CKA_VALUE, certificateDer),
+            scope.Attribute(CKA_SUBJECT, subjectDer),
+        };
+
+        if (id is not null)
+        {
+            template.Add(scope.Attribute(CKA_ID, id));
+        }
+
+        return _library.CreateObject(Handle, template.ToArray());
+    }
+
+    /// <summary>Stores an opaque data object on the token (e.g. CA state like a CRL number).</summary>
+    public NativeULong CreateDataObject(string label, byte[] value)
+    {
+        using var scope = new NativeAllocationScope();
+
+        var template = new[]
+        {
+            scope.Attribute(CKA_CLASS, CKO_DATA),
+            scope.Attribute(CKA_TOKEN, true),
+            scope.Attribute(CKA_LABEL, label),
+            scope.Attribute(CKA_VALUE, value),
+        };
+
+        return _library.CreateObject(Handle, template);
+    }
+
+    public void DestroyObject(NativeULong objectHandle) => _library.DestroyObject(Handle, objectHandle);
 
     /// <summary>Signs <paramref name="data"/> with the given private key handle.</summary>
     public byte[] Sign(CK_MECHANISM_TYPE mechanismType, byte[] data, NativeULong privateKeyHandle)

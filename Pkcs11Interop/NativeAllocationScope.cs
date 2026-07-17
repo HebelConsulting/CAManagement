@@ -44,6 +44,8 @@ public sealed class NativeAllocationScope : IDisposable
 
     public CK_ATTRIBUTE Attribute(CK_ATTRIBUTE_TYPE type, CK_KEY_TYPE value) => Attribute(type, (NativeULong)value);
 
+    public CK_ATTRIBUTE Attribute(CK_ATTRIBUTE_TYPE type, CK_CERTIFICATE_TYPE value) => Attribute(type, (NativeULong)value);
+
     public CK_ATTRIBUTE Attribute(CK_ATTRIBUTE_TYPE type, string value) => Attribute(type, Encoding.UTF8.GetBytes(value));
 
     public void Dispose()

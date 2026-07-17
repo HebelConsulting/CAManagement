@@ -47,6 +47,12 @@ public sealed partial class Pkcs11Library
     private delegate CK_RV CkLoginDelegate(NativeULong session, NativeULong userType, [In] byte[]? pin, NativeULong pinLength);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate CK_RV CkCreateObjectDelegate(NativeULong session, [In] CK_ATTRIBUTE[] template, NativeULong count, out NativeULong objectHandle);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate CK_RV CkDestroyObjectDelegate(NativeULong session, NativeULong objectHandle);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate CK_RV CkGenerateKeyPairDelegate(
         NativeULong session, ref CK_MECHANISM mechanism,
         [In] CK_ATTRIBUTE[] publicTemplate, NativeULong publicCount,
@@ -84,6 +90,8 @@ public sealed partial class Pkcs11Library
     private CkSlotIdDelegate _cCloseAllSessions = null!;
     private CkLoginDelegate _cLogin = null!;
     private CkSessionHandleDelegate _cLogout = null!;
+    private CkCreateObjectDelegate _cCreateObject = null!;
+    private CkDestroyObjectDelegate _cDestroyObject = null!;
     private CkGenerateKeyPairDelegate _cGenerateKeyPair = null!;
     private CkGetAttributeValueDelegate _cGetAttributeValue = null!;
     private CkFindObjectsInitDelegate _cFindObjectsInit = null!;
@@ -109,6 +117,8 @@ public sealed partial class Pkcs11Library
         _cCloseAllSessions = Bind<CkSlotIdDelegate>(_functions.C_CloseAllSessions, nameof(_functions.C_CloseAllSessions));
         _cLogin = Bind<CkLoginDelegate>(_functions.C_Login, nameof(_functions.C_Login));
         _cLogout = Bind<CkSessionHandleDelegate>(_functions.C_Logout, nameof(_functions.C_Logout));
+        _cCreateObject = Bind<CkCreateObjectDelegate>(_functions.C_CreateObject, nameof(_functions.C_CreateObject));
+        _cDestroyObject = Bind<CkDestroyObjectDelegate>(_functions.C_DestroyObject, nameof(_functions.C_DestroyObject));
         _cGenerateKeyPair = Bind<CkGenerateKeyPairDelegate>(_functions.C_GenerateKeyPair, nameof(_functions.C_GenerateKeyPair));
         _cGetAttributeValue = Bind<CkGetAttributeValueDelegate>(_functions.C_GetAttributeValue, nameof(_functions.C_GetAttributeValue));
         _cFindObjectsInit = Bind<CkFindObjectsInitDelegate>(_functions.C_FindObjectsInit, nameof(_functions.C_FindObjectsInit));
@@ -226,15 +236,32 @@ public sealed partial class Pkcs11Library
         return value;
     }
 
-    internal NativeULong[] FindObjects(NativeULong session, CK_ATTRIBUTE[] template, int maxCount)
+    internal NativeULong CreateObject(NativeULong session, CK_ATTRIBUTE[] template)
+    {
+        CheckRv(_cCreateObject(session, template, (NativeULong)template.Length, out var objectHandle), "C_CreateObject");
+        return objectHandle;
+    }
+
+    internal void DestroyObject(NativeULong session, NativeULong objectHandle) =>
+        CheckRv(_cDestroyObject(session, objectHandle), "C_DestroyObject");
+
+    internal NativeULong[] FindObjects(NativeULong session, CK_ATTRIBUTE[] template)
     {
         CheckRv(_cFindObjectsInit(session, template, (NativeULong)template.Length), "C_FindObjectsInit");
 
-        var buffer = new NativeULong[maxCount];
-        CheckRv(_cFindObjects(session, buffer, (NativeULong)maxCount, out var count), "C_FindObjects");
+        // Page until the module returns fewer handles than requested (PKCS#11 §5.7).
+        var handles = new List<NativeULong>();
+        var buffer = new NativeULong[64];
+        NativeULong count;
+        do
+        {
+            CheckRv(_cFindObjects(session, buffer, (NativeULong)buffer.Length, out count), "C_FindObjects");
+            handles.AddRange(buffer[..(int)count]);
+        } while (count == (NativeULong)buffer.Length);
+
         CheckRv(_cFindObjectsFinal(session), "C_FindObjectsFinal");
 
-        return buffer[..(int)count];
+        return handles.ToArray();
     }
 
     internal void SignInit(NativeULong session, CK_MECHANISM mechanism, NativeULong key) =>
