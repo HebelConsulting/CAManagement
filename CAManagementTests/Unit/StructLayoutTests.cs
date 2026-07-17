@@ -1,0 +1,43 @@
+using System.Runtime.InteropServices;
+using Pkcs11Interop.DataStructures;
+
+namespace CAManagementTests.Unit;
+
+/// <summary>
+/// Locks the marshalled size of every PKCS#11 struct to its Unix LP64 value
+/// (natural alignment, 8-byte CK_ULONG). A failure here means the native ABI
+/// contract changed — sizes must match the C structs from pkcs11t.h (2.40).
+/// </summary>
+public sealed class StructLayoutTests
+{
+    [Theory]
+    [InlineData(typeof(CK_VERSION), 2)]
+    [InlineData(typeof(CK_ATTRIBUTE), 24)]
+    [InlineData(typeof(CK_MECHANISM), 24)]
+    [InlineData(typeof(CK_C_INITIALIZE_ARGS), 48)]
+    [InlineData(typeof(CK_SLOT_INFO), 112)]
+    [InlineData(typeof(CK_TOKEN_INFO), 208)]
+    [InlineData(typeof(CK_INFO), 88)]
+    [InlineData(typeof(CK_SESSION_INFO), 32)]
+    [InlineData(typeof(CK_MECHANISM_INFO), 24)]
+    [InlineData(typeof(CK_DATE), 8)]
+    [InlineData(typeof(CK_RSA_PKCS_PSS_PARAMS), 24)]
+    [InlineData(typeof(CK_RSA_PKCS_OAEP_PARAMS), 40)]
+    [InlineData(typeof(CK_ECDH1_DERIVE_PARAMS), 40)]
+    public void Struct_has_expected_lp64_size(Type structType, int expectedSize)
+    {
+        Assert.Equal(expectedSize, Marshal.SizeOf(structType));
+    }
+
+    [Fact]
+    public void Constants_match_pkcs11t_h()
+    {
+        Assert.Equal(ulong.MaxValue, Pkcs11Constants.CK_UNAVAILABLE_INFORMATION);
+        Assert.Equal(0UL, Pkcs11Constants.CK_INVALID_HANDLE);
+        Assert.Equal(3UL, (ulong)CK_STATE.CKS_RW_USER_FUNCTIONS);
+        Assert.Equal(0UL, (ulong)CK_CERTIFICATE_TYPE.CKC_X_509);
+        Assert.Equal(2UL, (ulong)CK_RSA_PKCS_MGF_TYPE.CKG_MGF1_SHA256);
+        Assert.Equal(6UL, (ulong)CK_EC_KDF_TYPE.CKD_SHA256_KDF);
+        Assert.Equal(0x10000UL, (ulong)CK_MECHANISM_INFO_FLAGS.CKF_GENERATE_KEY_PAIR);
+    }
+}

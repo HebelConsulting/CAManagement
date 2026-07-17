@@ -17,6 +17,15 @@ public sealed partial class Pkcs11Library
     private delegate CK_RV CkFinalizeDelegate(IntPtr reserved);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate CK_RV CkGetInfoDelegate(out CK_INFO info);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate CK_RV CkGetSessionInfoDelegate(NativeULong session, out CK_SESSION_INFO info);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate CK_RV CkGetMechanismInfoDelegate(NativeULong slotId, CK_MECHANISM_TYPE mechanismType, out CK_MECHANISM_INFO info);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate CK_RV CkGetSlotListDelegate([MarshalAs(UnmanagedType.U1)] bool tokenPresent, [In, Out] NativeULong[]? slotList, ref NativeULong count);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -64,6 +73,9 @@ public sealed partial class Pkcs11Library
 
     private CkInitializeDelegate _cInitialize = null!;
     private CkFinalizeDelegate _cFinalize = null!;
+    private CkGetInfoDelegate _cGetInfo = null!;
+    private CkGetSessionInfoDelegate _cGetSessionInfo = null!;
+    private CkGetMechanismInfoDelegate _cGetMechanismInfo = null!;
     private CkGetSlotListDelegate _cGetSlotList = null!;
     private CkGetSlotInfoDelegate _cGetSlotInfo = null!;
     private CkGetTokenInfoDelegate _cGetTokenInfo = null!;
@@ -86,6 +98,9 @@ public sealed partial class Pkcs11Library
     {
         _cInitialize = Bind<CkInitializeDelegate>(_functions.C_Initialize, nameof(_functions.C_Initialize));
         _cFinalize = Bind<CkFinalizeDelegate>(_functions.C_Finalize, nameof(_functions.C_Finalize));
+        _cGetInfo = Bind<CkGetInfoDelegate>(_functions.C_GetInfo, nameof(_functions.C_GetInfo));
+        _cGetSessionInfo = Bind<CkGetSessionInfoDelegate>(_functions.C_GetSessionInfo, nameof(_functions.C_GetSessionInfo));
+        _cGetMechanismInfo = Bind<CkGetMechanismInfoDelegate>(_functions.C_GetMechanismInfo, nameof(_functions.C_GetMechanismInfo));
         _cGetSlotList = Bind<CkGetSlotListDelegate>(_functions.C_GetSlotList, nameof(_functions.C_GetSlotList));
         _cGetSlotInfo = Bind<CkGetSlotInfoDelegate>(_functions.C_GetSlotInfo, nameof(_functions.C_GetSlotInfo));
         _cGetTokenInfo = Bind<CkGetTokenInfoDelegate>(_functions.C_GetTokenInfo, nameof(_functions.C_GetTokenInfo));
@@ -120,6 +135,26 @@ public sealed partial class Pkcs11Library
     }
 
     private void Initialize(ref CK_C_INITIALIZE_ARGS args) => CheckRv(_cInitialize(ref args), "C_Initialize");
+
+    /// <summary>General library information (<c>C_GetInfo</c>).</summary>
+    public CK_INFO GetInfo()
+    {
+        CheckRv(_cGetInfo(out var info), "C_GetInfo");
+        return info;
+    }
+
+    internal CK_SESSION_INFO GetSessionInfo(NativeULong session)
+    {
+        CheckRv(_cGetSessionInfo(session, out var info), "C_GetSessionInfo");
+        return info;
+    }
+
+    /// <summary>Capabilities of a mechanism on a slot (<c>C_GetMechanismInfo</c>).</summary>
+    public CK_MECHANISM_INFO GetMechanismInfo(NativeULong slotId, CK_MECHANISM_TYPE mechanismType)
+    {
+        CheckRv(_cGetMechanismInfo(slotId, mechanismType, out var info), "C_GetMechanismInfo");
+        return info;
+    }
 
     private NativeULong[] GetSlotList(bool tokenPresent)
     {

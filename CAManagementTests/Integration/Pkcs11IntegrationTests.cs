@@ -1,6 +1,7 @@
 using System.Text;
 using Pkcs11Interop;
 using Pkcs11Interop.DataStructures;
+using Pkcs11Interop.Extensions;
 
 namespace CAManagementTests.Integration;
 
@@ -72,6 +73,43 @@ public sealed class Pkcs11IntegrationTests(SoftHsmFixture fixture)
         var signature = session.Sign(SignMechanism, Encoding.UTF8.GetBytes("original"), privateKey);
 
         Assert.False(session.Verify(SignMechanism, Encoding.UTF8.GetBytes("tampered"), signature, publicKey));
+    }
+
+    [Fact]
+    public void GetInfo_reports_softhsm_manufacturer()
+    {
+        using var library = new Pkcs11Library(fixture.CreateOptions());
+
+        var info = library.GetInfo();
+
+        Assert.Contains("SoftHSM", info.ManufacturerId.AsPkcs11String());
+        Assert.True(info.CryptokiVersion.Major >= 2);
+    }
+
+    [Fact]
+    public void GetSessionInfo_tracks_slot_and_login_state()
+    {
+        using var library = new Pkcs11Library(fixture.CreateOptions());
+        using var session = library.OpenSession();
+
+        var before = session.GetSessionInfo();
+        Assert.Equal(session.Slot, before.SlotId);
+        Assert.Equal(CK_STATE.CKS_RW_PUBLIC_SESSION, before.State);
+
+        using var _ = session.Login(SoftHsmFixture.UserPin);
+        Assert.Equal(CK_STATE.CKS_RW_USER_FUNCTIONS, session.GetSessionInfo().State);
+    }
+
+    [Fact]
+    public void GetMechanismInfo_reports_rsa_keygen_capability()
+    {
+        using var library = new Pkcs11Library(fixture.CreateOptions());
+        using var session = library.OpenSession();
+
+        var info = library.GetMechanismInfo(session.Slot, CK_MECHANISM_TYPE.CKM_RSA_PKCS_KEY_PAIR_GEN);
+
+        Assert.True(info.Flags.HasFlag(CK_MECHANISM_INFO_FLAGS.CKF_GENERATE_KEY_PAIR));
+        Assert.True(info.MinKeySize <= 2048 && 2048 <= info.MaxKeySize);
     }
 
     [Fact]

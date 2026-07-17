@@ -90,6 +90,20 @@ public sealed class Pkcs11Options
   drops trailing padding and under-sizes the marshalled buffer on Unix LP64.
   Standardized on natural alignment (SPEC #4).
 
+## DataStructures completeness (verified against `published/2-40-errata-1` headers)
+- **All constants complete**: every `#define` in pkcs11t.h (CKR/CKA/CKM/CKK/CKO/
+  CKC/CKU/CKS/CKD/CKG/CKZ/CKP/CKH/CKN/CKF/CK_*) has a C# representation.
+- **Structs**: all operational structs present (`CK_INFO`, `CK_SESSION_INFO`,
+  `CK_MECHANISM_INFO`, `CK_DATE`, token/slot info, function list) plus the
+  crypto-relevant mechanism params (`CK_RSA_PKCS_PSS_PARAMS`,
+  `CK_RSA_PKCS_OAEP_PARAMS`, `CK_ECDH1_DERIVE_PARAMS`).
+- **Deliberately omitted** (add on demand): ~53 legacy protocol param structs
+  (SSL3/TLS/WTLS key material, OTP, RC2/RC5/SKIPJACK/KEA/SEED/CAMELLIA/ARIA/
+  GOST, PBE/PBKD2, X9.42/ECMQV/ECDH2) — untestable against SoftHSM and out of
+  CA scope.
+- `StructLayoutTests` locks every marshalled struct to its LP64 size; the
+  Windows port must revisit these together with `NativeULong`/packing (SPEC #4).
+
 ## Console CLI
 - **Spectre.Console.Cli** (replaced CommandLineParser), wired to DI via a
   `TypeRegistrar`/`TypeResolver` bridge. First command: `caconsole info`.

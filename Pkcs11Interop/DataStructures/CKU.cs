@@ -2,7 +2,7 @@
 
 namespace Pkcs11Interop.DataStructures;
 
-public enum CKU : uint
+public enum CKU : NativeULong
 {
     CKU_SO = 0,
     

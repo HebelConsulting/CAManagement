@@ -92,6 +92,9 @@ public sealed class Pkcs11Session : IDisposable
         return _library.GenerateKeyPair(Handle, mechanism, publicTemplate, privateTemplate);
     }
 
+    /// <summary>Session state and flags (<c>C_GetSessionInfo</c>).</summary>
+    public CK_SESSION_INFO GetSessionInfo() => _library.GetSessionInfo(Handle);
+
     /// <summary>Reads a single attribute's raw value from an object.</summary>
     public byte[] GetAttributeValue(NativeULong objectHandle, CK_ATTRIBUTE_TYPE type) =>
         _library.GetAttributeValue(Handle, objectHandle, type);
