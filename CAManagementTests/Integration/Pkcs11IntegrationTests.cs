@@ -45,6 +45,23 @@ public sealed class Pkcs11IntegrationTests(SoftHsmFixture fixture)
     }
 
     [Fact]
+    public void Generates_ec_keypair_and_round_trips_an_ecdsa_signature()
+    {
+        using var library = new Pkcs11Library(fixture.CreateOptions());
+        using var session = library.OpenSession();
+        using var _ = session.Login(SoftHsmFixture.UserPin);
+
+        var (publicKey, privateKey) = session.GenerateEcKeyPair($"ec-{Guid.NewGuid():N}");
+        var data = Encoding.UTF8.GetBytes("The quick brown fox");
+
+        var signature = session.Sign(CK_MECHANISM_TYPE.CKM_ECDSA_SHA256, data, privateKey);
+
+        Assert.NotEmpty(signature);
+        Assert.True(session.Verify(CK_MECHANISM_TYPE.CKM_ECDSA_SHA256, data, signature, publicKey));
+        Assert.False(session.Verify(CK_MECHANISM_TYPE.CKM_ECDSA_SHA256, Encoding.UTF8.GetBytes("tampered"), signature, publicKey));
+    }
+
+    [Fact]
     public void Verify_fails_for_tampered_data()
     {
         using var library = new Pkcs11Library(fixture.CreateOptions());

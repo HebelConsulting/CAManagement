@@ -65,6 +65,33 @@ public sealed class Pkcs11Session : IDisposable
         return _library.GenerateKeyPair(Handle, mechanism, publicTemplate, privateTemplate);
     }
 
+    public (NativeULong publicKey, NativeULong privateKey) GenerateEcKeyPair(
+        string label, EllipticCurve curve = EllipticCurve.NistP256)
+    {
+        using var scope = new NativeAllocationScope();
+
+        var publicTemplate = new[]
+        {
+            scope.Attribute(CKA_TOKEN, true),
+            scope.Attribute(CKA_LABEL, label),
+            scope.Attribute(CKA_VERIFY, true),
+            scope.Attribute(CKA_EC_PARAMS, curve.EcParams()),
+        };
+
+        var privateTemplate = new[]
+        {
+            scope.Attribute(CKA_TOKEN, true),
+            scope.Attribute(CKA_LABEL, label),
+            scope.Attribute(CKA_PRIVATE, true),
+            scope.Attribute(CKA_SENSITIVE, true),
+            scope.Attribute(CKA_SIGN, true),
+        };
+
+        var mechanism = new CK_MECHANISM { Mechanism = CK_MECHANISM_TYPE.CKM_EC_KEY_PAIR_GEN };
+
+        return _library.GenerateKeyPair(Handle, mechanism, publicTemplate, privateTemplate);
+    }
+
     public IReadOnlyList<NativeULong> FindObjects(CK_OBJECT_CLASS objectClass, CK_KEY_TYPE keyType)
     {
         using var scope = new NativeAllocationScope();
