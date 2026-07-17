@@ -1,5 +1,3 @@
-using NativeULong = System.UInt64;
-
 // ReSharper disable InconsistentNaming
 namespace Pkcs11Interop.DataStructures;
 

@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using NativeULong = System.UInt64;
 
 namespace Pkcs11Interop.DataStructures;
 

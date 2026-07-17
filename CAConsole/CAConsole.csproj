@@ -2,12 +2,12 @@
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
-        <TargetFramework>net8.0</TargetFramework>
+        <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <PublishSingleFile>true</PublishSingleFile>
         <SelfContained>true</SelfContained>
-        <RuntimeIdentifier>osx-x64</RuntimeIdentifier>
+        <RuntimeIdentifier>osx-arm64</RuntimeIdentifier>
         <PackageOutputPath>./nupkg</PackageOutputPath>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <Company>Hebel Consulting GmbH</Company>
@@ -16,7 +16,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="CommandLineParser" Version="2.9.1" />
+        <PackageReference Include="Spectre.Console.Cli" Version="0.50.0" />
         <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="9.0.7" />
         <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.7" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.7" />
@@ -24,6 +24,16 @@
         <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.7" />
         <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.7" />
         <PackageReference Include="System.Formats.Asn1" Version="9.0.7" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Pkcs11Interop\Pkcs11Interop.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Update="appsettings.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
     </ItemGroup>
     
     <ItemGroup>

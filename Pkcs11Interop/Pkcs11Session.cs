@@ -1,0 +1,123 @@
+using Pkcs11Interop.DataStructures;
+using static Pkcs11Interop.DataStructures.CK_ATTRIBUTE_TYPE;
+using static Pkcs11Interop.DataStructures.CK_OBJECT_CLASS;
+
+namespace Pkcs11Interop;
+
+/// <summary>
+/// An open PKCS#11 session. Owns the session handle; disposing closes it
+/// (SPEC decision #7). Operations allocate their attribute templates in a
+/// <see cref="NativeAllocationScope"/> so native memory is always freed.
+/// </summary>
+public sealed class Pkcs11Session : IDisposable
+{
+    private static readonly byte[] DefaultPublicExponent = [0x01, 0x00, 0x01]; // 65537
+
+    private readonly Pkcs11Library _library;
+
+    private bool _disposed;
+
+    public NativeULong Slot { get; }
+
+    public NativeULong Handle { get; }
+
+    internal Pkcs11Session(Pkcs11Library library, NativeULong slot, NativeULong handle)
+    {
+        _library = library;
+        Slot = slot;
+        Handle = handle;
+    }
+
+    /// <summary>Logs in and returns a scope that logs out when disposed (SPEC #7).</summary>
+    public LoginScope Login(string pin, CKU userType = CKU.CKU_USER)
+    {
+        _library.Login(Handle, userType, System.Text.Encoding.UTF8.GetBytes(pin));
+        return new LoginScope(this);
+    }
+
+    internal void Logout() => _library.Logout(Handle);
+
+    public (NativeULong publicKey, NativeULong privateKey) GenerateRsaKeyPair(
+        string label, NativeULong modulusBits = 2048, byte[]? publicExponent = null)
+    {
+        using var scope = new NativeAllocationScope();
+
+        var publicTemplate = new[]
+        {
+            scope.Attribute(CKA_TOKEN, true),
+            scope.Attribute(CKA_LABEL, label),
+            scope.Attribute(CKA_VERIFY, true),
+            scope.Attribute(CKA_MODULUS_BITS, modulusBits),
+            scope.Attribute(CKA_PUBLIC_EXPONENT, publicExponent ?? DefaultPublicExponent),
+        };
+
+        var privateTemplate = new[]
+        {
+            scope.Attribute(CKA_TOKEN, true),
+            scope.Attribute(CKA_LABEL, label),
+            scope.Attribute(CKA_PRIVATE, true),
+            scope.Attribute(CKA_SENSITIVE, true),
+            scope.Attribute(CKA_SIGN, true),
+        };
+
+        var mechanism = new CK_MECHANISM { Mechanism = CK_MECHANISM_TYPE.CKM_RSA_PKCS_KEY_PAIR_GEN };
+
+        return _library.GenerateKeyPair(Handle, mechanism, publicTemplate, privateTemplate);
+    }
+
+    public IReadOnlyList<NativeULong> FindObjects(CK_OBJECT_CLASS objectClass, CK_KEY_TYPE keyType)
+    {
+        using var scope = new NativeAllocationScope();
+
+        var template = new[]
+        {
+            scope.Attribute(CKA_CLASS, objectClass),
+            scope.Attribute(CKA_TOKEN, true),
+            scope.Attribute(CKA_KEY_TYPE, keyType),
+        };
+
+        return _library.FindObjects(Handle, template, maxCount: 16);
+    }
+
+    /// <summary>Signs <paramref name="data"/> with the given private key handle.</summary>
+    public byte[] Sign(CK_MECHANISM_TYPE mechanismType, byte[] data, NativeULong privateKeyHandle)
+    {
+        _library.SignInit(Handle, new CK_MECHANISM { Mechanism = mechanismType }, privateKeyHandle);
+
+        return _library.Sign(Handle, data);
+    }
+
+    /// <summary>Signs using the token's single RSA/EC private key (convenience overload).</summary>
+    public byte[] Sign(CK_MECHANISM_TYPE mechanismType, byte[] data) =>
+        Sign(mechanismType, data, SingleObject(FindObjects(CKO_PRIVATE_KEY, Mechanisms.KeyTypeFor(mechanismType))));
+
+    /// <summary>Verifies <paramref name="signature"/> with the given public key handle.</summary>
+    public bool Verify(CK_MECHANISM_TYPE mechanismType, byte[] data, byte[] signature, NativeULong publicKeyHandle)
+    {
+        _library.VerifyInit(Handle, new CK_MECHANISM { Mechanism = mechanismType }, publicKeyHandle);
+
+        return _library.Verify(Handle, data, signature);
+    }
+
+    /// <summary>Verifies using the token's single RSA/EC public key (convenience overload).</summary>
+    public bool Verify(CK_MECHANISM_TYPE mechanismType, byte[] data, byte[] signature) =>
+        Verify(mechanismType, data, signature, SingleObject(FindObjects(CKO_PUBLIC_KEY, Mechanisms.KeyTypeFor(mechanismType))));
+
+    private static NativeULong SingleObject(IReadOnlyList<NativeULong> handles) => handles.Count switch
+    {
+        1 => handles[0],
+        0 => throw new InvalidOperationException("No matching object was found on the token."),
+        _ => throw new InvalidOperationException($"Expected exactly one matching object but found {handles.Count}."),
+    };
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _library.CloseSession(Handle);
+    }
+}

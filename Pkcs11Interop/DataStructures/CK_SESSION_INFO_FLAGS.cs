@@ -1,6 +1,5 @@
-using NativeULong = System.UInt64;
-
-// ReSharper disable InconsistentNamingnamespace Pkcs11Interop.DataStructures;
+// ReSharper disable InconsistentNaming
+namespace Pkcs11Interop.DataStructures;
 
 [Flags]
 public enum CK_SESSION_INFO_FLAGS : NativeULong
