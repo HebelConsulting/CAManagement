@@ -30,6 +30,12 @@ public static class OidNames
         [Oids.Secp384R1] = "secp384r1",
         [Oids.Secp521R1] = "secp521r1",
 
+        // Edwards / Montgomery curve algorithms (RFC 8410)
+        [Oids.X25519] = "X25519",
+        [Oids.X448] = "X448",
+        [Oids.Ed25519] = "Ed25519",
+        [Oids.Ed448] = "Ed448",
+
         // X.500 attribute types
         [Oids.CommonName] = "commonName",
         [Oids.SerialNumberAttribute] = "serialNumber",

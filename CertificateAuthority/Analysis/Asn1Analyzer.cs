@@ -12,6 +12,9 @@ public sealed record AnalyzedDocument(DocumentKind Kind, Asn1Node Root);
 /// </summary>
 public static class Asn1Analyzer
 {
+    private static readonly string[] SshPublicKeyPrefixes =
+        ["ssh-ed25519", "ssh-rsa", "ssh-dss", "ecdsa-sha2-", "sk-ssh-", "sk-ecdsa-"];
+
     public static AnalyzedDocument Analyze(byte[] data)
     {
         // PEM files may start with comment text (e.g. CA bundles), so search
@@ -21,16 +24,43 @@ public static class Asn1Analyzer
             return Analyze(Encoding.UTF8.GetString(data));
         }
 
+        ThrowIfSshPublicKey(Encoding.UTF8.GetString(data, 0, Math.Min(data.Length, 64)));
+
         return AnalyzeDer(data, pemLabel: null);
     }
 
-    public static AnalyzedDocument Analyze(string pemText) =>
-        Pem.TryDecodeFirst(pemText) is { } pem
-            ? AnalyzeDer(pem.Der, pem.Label)
-            : throw new FormatException("No PEM block found in the input.");
+    public static AnalyzedDocument Analyze(string pemText)
+    {
+        ThrowIfSshPublicKey(pemText);
+
+        var pem = Pem.TryDecodeFirst(pemText)
+            ?? throw new FormatException("No PEM block found in the input.");
+
+        return AnalyzeDer(pem.Der, pem.Label);
+    }
+
+    private static void ThrowIfSshPublicKey(string text)
+    {
+        var start = text.TrimStart();
+        if (SshPublicKeyPrefixes.Any(prefix => start.StartsWith(prefix, StringComparison.Ordinal)))
+        {
+            throw new FormatException(
+                "OpenSSH public keys use the SSH wire format (RFC 4253), not ASN.1. " +
+                "RSA and ECDSA keys can be converted with 'ssh-keygen -e -m PKCS8 -f <file>'; " +
+                "Ed25519 keys cannot leave OpenSSH's own format.");
+        }
+    }
 
     public static AnalyzedDocument AnalyzeDer(byte[] der, string? pemLabel)
     {
+        if (pemLabel == "OPENSSH PRIVATE KEY")
+        {
+            throw new FormatException(
+                "OpenSSH private keys use the proprietary 'openssh-key-v1' container, not ASN.1. " +
+                "RSA and ECDSA keys can be converted on a copy with 'ssh-keygen -p -m PKCS8 -f <copy>'; " +
+                "Ed25519 keys cannot leave OpenSSH's own format.");
+        }
+
         var roots = Asn1TreeParser.Parse(der);
         if (roots.Count != 1)
         {
@@ -120,7 +150,8 @@ public static class Asn1Analyzer
     private static bool IsSpkiShape(IReadOnlyList<Asn1Node> c) =>
         c.Count == 2
         && c[0].TagName == "SEQUENCE" && c[1].TagName == "BIT STRING"
-        && c[0].Children.FirstOrDefault()?.DecodedOid is Oids.RsaEncryption or Oids.EcPublicKey;
+        && c[0].Children.FirstOrDefault()?.DecodedOid is
+            Oids.RsaEncryption or Oids.EcPublicKey or Oids.Ed25519 or Oids.Ed448 or Oids.X25519 or Oids.X448;
 
     private static bool IsPkcs8Shape(IReadOnlyList<Asn1Node> c) =>
         c.Count >= 3

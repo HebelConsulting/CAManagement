@@ -20,6 +20,12 @@ public static class Oids
     public const string Secp384R1 = "1.3.132.0.34";
     public const string Secp521R1 = "1.3.132.0.35";
 
+    // Edwards / Montgomery curve algorithms (RFC 8410)
+    public const string X25519 = "1.3.101.110";
+    public const string X448 = "1.3.101.111";
+    public const string Ed25519 = "1.3.101.112";
+    public const string Ed448 = "1.3.101.113";
+
     // PKCS#9 attributes
     public const string ExtensionRequest = "1.2.840.113549.1.9.14";
 
