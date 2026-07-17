@@ -24,6 +24,7 @@
         <ProjectReference Include="..\Pkcs11Interop\Pkcs11Interop.csproj" />
         <ProjectReference Include="..\CertificateAuthority\CertificateAuthority.csproj" />
         <ProjectReference Include="..\Pkcs11Signing\Pkcs11Signing.csproj" />
+        <ProjectReference Include="..\CAConsole\CAConsole.csproj" />
     </ItemGroup>
 
 </Project>
