@@ -134,6 +134,36 @@ public sealed class Asn1AnalyzerTests
     }
 
     [Fact]
+    public void Bundle_with_leading_comments_is_recognized_as_pem()
+    {
+        var (der, key) = CreateSelfSignedCertificate();
+        using var _ = key;
+        var bundle = $"## CA bundle comment\n## another line\n{Pem.Encode("CERTIFICATE", der)}\n";
+
+        var document = Asn1Analyzer.Analyze(System.Text.Encoding.UTF8.GetBytes(bundle));
+
+        Assert.Equal(DocumentKind.Certificate, document.Kind);
+    }
+
+    [Fact]
+    public void DecodeAll_returns_every_block_of_a_bundle()
+    {
+        var (first, firstKey) = CreateSelfSignedCertificate();
+        var (second, secondKey) = CreateSelfSignedCertificate();
+        using var _1 = firstKey;
+        using var _2 = secondKey;
+
+        var bundle = $"## comment\n{Pem.Encode("CERTIFICATE", first)}\n## between\n{Pem.Encode("CERTIFICATE", second)}\n";
+
+        var blocks = Pem.DecodeAll(bundle);
+
+        Assert.Equal(2, blocks.Count);
+        Assert.All(blocks, b => Assert.Equal("CERTIFICATE", b.Label));
+        Assert.Equal(first, blocks[0].Der);
+        Assert.Equal(second, blocks[1].Der);
+    }
+
+    [Fact]
     public void Offsets_and_lengths_describe_the_document()
     {
         var (der, key) = CreateSelfSignedCertificate();

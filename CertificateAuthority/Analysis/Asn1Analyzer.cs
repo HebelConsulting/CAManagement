@@ -14,9 +14,11 @@ public static class Asn1Analyzer
 {
     public static AnalyzedDocument Analyze(byte[] data)
     {
-        if (data.Length > 10 && Encoding.ASCII.GetString(data, 0, 10).StartsWith("-----"))
+        // PEM files may start with comment text (e.g. CA bundles), so search
+        // anywhere rather than only at the start.
+        if (data.AsSpan().IndexOf("-----BEGIN"u8) >= 0)
         {
-            return Analyze(Encoding.ASCII.GetString(data));
+            return Analyze(Encoding.UTF8.GetString(data));
         }
 
         return AnalyzeDer(data, pemLabel: null);
@@ -27,7 +29,7 @@ public static class Asn1Analyzer
             ? AnalyzeDer(pem.Der, pem.Label)
             : throw new FormatException("No PEM block found in the input.");
 
-    private static AnalyzedDocument AnalyzeDer(byte[] der, string? pemLabel)
+    public static AnalyzedDocument AnalyzeDer(byte[] der, string? pemLabel)
     {
         var roots = Asn1TreeParser.Parse(der);
         if (roots.Count != 1)

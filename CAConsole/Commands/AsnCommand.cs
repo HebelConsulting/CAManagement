@@ -13,11 +13,16 @@ public sealed class AsnCommand : Command<AsnCommand.Settings>
         [CommandArgument(0, "<file>")]
         [Description("Certificate, CSR, CRL, public or private key file (PEM or DER).")]
         public required string File { get; init; }
+
+        [CommandOption("--index <N>")]
+        [Description("1-based PEM block to analyze when the file contains several (e.g. a CA bundle).")]
+        [DefaultValue(1)]
+        public int Index { get; init; } = 1;
     }
 
     public override int Execute(CommandContext context, Settings settings)
     {
-        var document = Asn1Analyzer.Analyze(System.IO.File.ReadAllBytes(settings.File));
+        var document = Load(settings);
 
         AnsiConsole.MarkupLine($"Detected: [bold green]{document.Kind}[/]");
 
@@ -29,6 +34,39 @@ public sealed class AsnCommand : Command<AsnCommand.Settings>
         AnsiConsole.Write(table);
 
         return 0;
+    }
+
+    private static AnalyzedDocument Load(Settings settings)
+    {
+        var bytes = System.IO.File.ReadAllBytes(settings.File);
+
+        if (bytes.AsSpan().IndexOf("-----BEGIN"u8) < 0)
+        {
+            return Asn1Analyzer.Analyze(bytes); // raw DER
+        }
+
+        var blocks = CertificateAuthority.Pem.DecodeAll(System.Text.Encoding.UTF8.GetString(bytes));
+        if (blocks.Count == 0)
+        {
+            throw new FormatException($"'{settings.File}' contains no decodable PEM block.");
+        }
+
+        if (settings.Index < 1 || settings.Index > blocks.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(settings.Index),
+                $"--index must be between 1 and {blocks.Count} for this file.");
+        }
+
+        var (label, der) = blocks[settings.Index - 1];
+
+        if (blocks.Count > 1)
+        {
+            AnsiConsole.MarkupLine(
+                $"File contains [bold]{blocks.Count}[/] PEM blocks; analyzing block [bold]{settings.Index}[/] ({label}). " +
+                "Use [blue]--index[/] to pick another.");
+        }
+
+        return Asn1Analyzer.AnalyzeDer(der, label);
     }
 
     private static void AddRows(Table table, Asn1Node node, int depth)
