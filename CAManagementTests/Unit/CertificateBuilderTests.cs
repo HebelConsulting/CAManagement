@@ -151,13 +151,6 @@ public sealed class CertificateBuilderTests
         Assert.Throws<InvalidOperationException>(() => builder.SignSelfSigned(new EcdsaSoftwareSigner(caKey)));
     }
 
-    internal static bool ChainValidates(X509Certificate2 leaf, X509Certificate2 root)
-    {
-        using var chain = new X509Chain();
-        chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
-        chain.ChainPolicy.CustomTrustStore.Add(root);
-        chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
-
-        return chain.Build(leaf);
-    }
+    internal static bool ChainValidates(X509Certificate2 leaf, X509Certificate2 root) =>
+        CertificateValidation.Validate(leaf.RawData, [root.RawData]).IsValid;
 }
