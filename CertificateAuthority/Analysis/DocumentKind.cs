@@ -10,4 +10,6 @@ public enum DocumentKind
     Pkcs8PrivateKey,
     RsaPrivateKey,
     EcPrivateKey,
+    Pkcs12,
+    Cms,
 }

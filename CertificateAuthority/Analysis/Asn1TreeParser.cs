@@ -3,9 +3,11 @@ using System.Formats.Asn1;
 namespace CertificateAuthority.Analysis;
 
 /// <summary>
-/// Parses arbitrary DER into a tree of <see cref="Asn1Node"/>s. OCTET STRING and
-/// BIT STRING contents that are themselves valid DER are descended into
-/// (extension values, wrapped keys), like certutil does.
+/// Parses arbitrary BER/DER into a tree of <see cref="Asn1Node"/>s. BER rules are
+/// used deliberately: analysis wants acceptance (CMS/PKCS#7 blobs commonly use
+/// BER indefinite lengths), unlike the DER-strict production encoders. OCTET
+/// STRING and BIT STRING contents that are themselves valid encodings are
+/// descended into (extension values, wrapped keys), like certutil does.
 /// </summary>
 public static class Asn1TreeParser
 {
@@ -22,7 +24,7 @@ public static class Asn1TreeParser
         {
             var slice = data.Span[position..];
             var tag = Asn1Tag.Decode(slice, out _);
-            AsnDecoder.ReadEncodedValue(slice, AsnEncodingRules.DER, out var contentOffset, out var contentLength, out var bytesConsumed);
+            AsnDecoder.ReadEncodedValue(slice, AsnEncodingRules.BER, out var contentOffset, out var contentLength, out var bytesConsumed);
 
             var content = data.Slice(position + contentOffset, contentLength);
             var element = data.Slice(position, bytesConsumed);
@@ -99,25 +101,25 @@ public static class Asn1TreeParser
             switch ((UniversalTagNumber)tag.TagValue)
             {
                 case UniversalTagNumber.Boolean:
-                    return (AsnDecoder.ReadBoolean(element, AsnEncodingRules.DER, out _) ? "TRUE" : "FALSE", null);
+                    return (AsnDecoder.ReadBoolean(element, AsnEncodingRules.BER, out _) ? "TRUE" : "FALSE", null);
                 case UniversalTagNumber.Integer:
                 case UniversalTagNumber.Enumerated:
                     return (RenderInteger(content), null);
                 case UniversalTagNumber.Null:
                     return ("NULL", null);
                 case UniversalTagNumber.ObjectIdentifier:
-                    var oid = AsnDecoder.ReadObjectIdentifier(element, AsnEncodingRules.DER, out _);
+                    var oid = AsnDecoder.ReadObjectIdentifier(element, AsnEncodingRules.BER, out _);
                     return (OidNames.For(oid) is { } name ? $"{oid} ({name})" : oid, oid);
                 case UniversalTagNumber.UtcTime:
-                    return (AsnDecoder.ReadUtcTime(element, AsnEncodingRules.DER, out _).ToString("yyyy-MM-dd HH:mm:ss 'UTC'"), null);
+                    return (AsnDecoder.ReadUtcTime(element, AsnEncodingRules.BER, out _).ToString("yyyy-MM-dd HH:mm:ss 'UTC'"), null);
                 case UniversalTagNumber.GeneralizedTime:
-                    return (AsnDecoder.ReadGeneralizedTime(element, AsnEncodingRules.DER, out _).ToString("yyyy-MM-dd HH:mm:ss 'UTC'"), null);
+                    return (AsnDecoder.ReadGeneralizedTime(element, AsnEncodingRules.BER, out _).ToString("yyyy-MM-dd HH:mm:ss 'UTC'"), null);
                 case UniversalTagNumber.UTF8String:
                 case UniversalTagNumber.PrintableString:
                 case UniversalTagNumber.IA5String:
                 case UniversalTagNumber.BMPString:
                 case UniversalTagNumber.T61String:
-                    var text = AsnDecoder.ReadCharacterString(element, AsnEncodingRules.DER, (UniversalTagNumber)tag.TagValue, out _);
+                    var text = AsnDecoder.ReadCharacterString(element, AsnEncodingRules.BER, (UniversalTagNumber)tag.TagValue, out _);
                     return ($"\"{text}\"", null);
                 case UniversalTagNumber.BitString:
                     var unused = content.Length > 0 ? content[0] : 0;

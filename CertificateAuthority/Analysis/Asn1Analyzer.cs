@@ -47,6 +47,8 @@ public static class Asn1Analyzer
             case DocumentKind.Pkcs8PrivateKey: AnnotatePkcs8(root); break;
             case DocumentKind.RsaPrivateKey: AnnotateRsaPrivateKey(root); break;
             case DocumentKind.EcPrivateKey: AnnotateEcPrivateKey(root); break;
+            case DocumentKind.Pkcs12: AnnotatePfx(root); break;
+            case DocumentKind.Cms: AnnotateContentInfo(root, "ContentInfo", "CMS/PKCS#7 content envelope (RFC 5652)"); break;
         }
 
         return new AnalyzedDocument(kind, root);
@@ -62,6 +64,8 @@ public static class Asn1Analyzer
         "PRIVATE KEY" => DocumentKind.Pkcs8PrivateKey,
         "RSA PRIVATE KEY" => DocumentKind.RsaPrivateKey,
         "EC PRIVATE KEY" => DocumentKind.EcPrivateKey,
+        "PKCS7" or "CMS" => DocumentKind.Cms,
+        "PKCS12" => DocumentKind.Pkcs12,
         _ => DocumentKind.Unknown,
     };
 
@@ -82,6 +86,8 @@ public static class Asn1Analyzer
             _ when IsCertificateShape(c) => DocumentKind.Certificate,
             _ when IsCrlShape(c) => DocumentKind.CertificateList,
             _ when IsSpkiShape(c) => DocumentKind.SubjectPublicKeyInfo,
+            _ when IsPkcs12Shape(c) => DocumentKind.Pkcs12,
+            _ when IsCmsShape(c) => DocumentKind.Cms,
             _ when IsPkcs8Shape(c) => DocumentKind.Pkcs8PrivateKey,
             _ when IsRsaPrivateKeyShape(c) => DocumentKind.RsaPrivateKey,
             _ when IsEcPrivateKeyShape(c) => DocumentKind.EcPrivateKey,
@@ -125,6 +131,20 @@ public static class Asn1Analyzer
 
     private static bool IsEcPrivateKeyShape(IReadOnlyList<Asn1Node> c) =>
         c.Count >= 2 && c[0] is { TagName: "INTEGER", Value: "1" } && c[1].TagName == "OCTET STRING";
+
+    private static bool IsPkcs12Shape(IReadOnlyList<Asn1Node> c) =>
+        c.Count is 2 or 3
+        && c[0] is { TagName: "INTEGER", Value: "3" }
+        && c[1].TagName == "SEQUENCE"
+        && IsPkcs7ContentType(c[1].Children.FirstOrDefault());
+
+    private static bool IsCmsShape(IReadOnlyList<Asn1Node> c) =>
+        c.Count is 1 or 2
+        && IsPkcs7ContentType(c[0])
+        && (c.Count == 1 || c[1].TagName == "[0]");
+
+    private static bool IsPkcs7ContentType(Asn1Node? node) =>
+        node?.DecodedOid?.StartsWith("1.2.840.113549.1.7.", StringComparison.Ordinal) == true;
 
     // --- annotators -----------------------------------------------------------
 
@@ -411,5 +431,260 @@ public static class Asn1Analyzer
                 case "[1]": Label(node, "publicKey", "The matching public point"); break;
             }
         }
+    }
+
+    // --- CMS / PKCS#7 ---------------------------------------------------------
+
+    private static void AnnotateContentInfo(Asn1Node node, string name, string explanation)
+    {
+        Label(node, name, explanation);
+        if (node.Children.Count == 0)
+        {
+            return;
+        }
+
+        var contentType = node.Children[0].DecodedOid;
+        Label(node.Children[0], "contentType", "Kind of content that follows");
+
+        if (node.Children.Count < 2)
+        {
+            return; // degenerate ContentInfo without content
+        }
+
+        var content = node.Children[1];
+        Label(content, "content", "The typed content");
+
+        switch (contentType)
+        {
+            case OidNames.Pkcs7SignedData when content.Children.FirstOrDefault() is { } signedData:
+                AnnotateSignedData(signedData);
+                break;
+            case OidNames.Pkcs7Data when content.Children.FirstOrDefault() is { } data:
+                Label(data, "data", "Opaque payload (OCTET STRING)");
+                break;
+            case OidNames.Pkcs7EncryptedData when content.Children.FirstOrDefault() is { } encryptedData:
+                AnnotateEncryptedData(encryptedData);
+                break;
+        }
+    }
+
+    private static void AnnotateSignedData(Asn1Node node)
+    {
+        Label(node, "SignedData", "CMS signed content (a .p7b bundle has certificates but no signers)");
+        var c = node.Children;
+        var i = 0;
+
+        if (i < c.Count && c[i].TagName == "INTEGER") Label(c[i++], "version", "SignedData syntax version");
+        if (i < c.Count && c[i].TagName == "SET")
+        {
+            Label(c[i], "digestAlgorithms", "Digest algorithms used by the signers");
+            foreach (var algorithm in c[i].Children)
+            {
+                AnnotateAlgorithm(algorithm, "digestAlgorithm", "Digest algorithm");
+            }
+            i++;
+        }
+        if (i < c.Count && c[i].TagName == "SEQUENCE")
+        {
+            AnnotateContentInfo(c[i++], "encapContentInfo", "The content that was signed");
+        }
+
+        for (; i < c.Count; i++)
+        {
+            switch (c[i].TagName)
+            {
+                case "[0]":
+                    Label(c[i], "certificates", "Bundled certificates");
+                    foreach (var certificate in c[i].Children)
+                    {
+                        AnnotateCertificate(certificate);
+                    }
+                    break;
+                case "[1]":
+                    Label(c[i], "crls", "Bundled revocation lists");
+                    foreach (var crl in c[i].Children)
+                    {
+                        AnnotateCertificateList(crl);
+                    }
+                    break;
+                case "SET":
+                    Label(c[i], "signerInfos", "Per-signer signatures over the content");
+                    break;
+            }
+        }
+    }
+
+    private static void AnnotateEncryptedData(Asn1Node node)
+    {
+        Label(node, "EncryptedData", "Password-encrypted content");
+        var c = node.Children;
+
+        if (c.Count > 0) Label(c[0], "version", "EncryptedData syntax version");
+        if (c.Count > 1)
+        {
+            Label(c[1], "encryptedContentInfo", "What is encrypted and how");
+            var info = c[1].Children;
+
+            if (info.Count > 0) Label(info[0], "contentType", "Kind of the encrypted content");
+            if (info.Count > 1)
+            {
+                AnnotateAlgorithm(info[1], "contentEncryptionAlgorithm", "Password-based encryption scheme");
+                AnnotatePbes2(info[1]);
+            }
+            if (info.Count > 2) Label(info[2], "encryptedContent", "The ciphertext (needs the password to decode)");
+        }
+    }
+
+    /// <summary>Drills into PBES2 parameters: PBKDF2 salt/iterations and the cipher/IV.</summary>
+    private static void AnnotatePbes2(Asn1Node algorithmIdentifier)
+    {
+        if (algorithmIdentifier.Children.FirstOrDefault()?.DecodedOid != OidNames.Pbes2
+            || algorithmIdentifier.Children.ElementAtOrDefault(1) is not { } parameters)
+        {
+            return;
+        }
+
+        if (parameters.Children.ElementAtOrDefault(0) is { } kdf)
+        {
+            AnnotateAlgorithm(kdf, "keyDerivationFunc", "How the password becomes a key");
+
+            if (kdf.Children.FirstOrDefault()?.DecodedOid == OidNames.Pbkdf2
+                && kdf.Children.ElementAtOrDefault(1) is { } kdfParameters)
+            {
+                var p = kdfParameters.Children;
+                if (p.Count > 0) Label(p[0], "salt", "PBKDF2 salt");
+                if (p.Count > 1) Label(p[1], "iterationCount", "PBKDF2 iterations (higher = slower brute force)");
+                for (var i = 2; i < p.Count; i++)
+                {
+                    if (p[i].TagName == "INTEGER") Label(p[i], "keyLength", "Derived key length in bytes");
+                    if (p[i].TagName == "SEQUENCE") AnnotateAlgorithm(p[i], "prf", "Pseudo-random function");
+                }
+            }
+        }
+
+        if (parameters.Children.ElementAtOrDefault(1) is { } scheme)
+        {
+            AnnotateAlgorithm(scheme, "encryptionScheme", "Cipher (parameter is the IV)");
+        }
+    }
+
+    // --- PKCS#12 --------------------------------------------------------------
+
+    private static void AnnotatePfx(Asn1Node root)
+    {
+        Label(root, "PFX", "PKCS#12 container (RFC 7292) — bundles keys and certificates");
+        var c = root.Children;
+
+        if (c.Count > 0) Label(c[0], "version", "PKCS#12 version (3)");
+
+        if (c.Count > 1)
+        {
+            AnnotateContentInfo(c[1], "authSafe", "The authenticated safe holding all payloads");
+
+            // authSafe: data -> OCTET STRING encapsulating AuthenticatedSafe (SEQUENCE OF ContentInfo)
+            var authenticatedSafe = c[1].Children.ElementAtOrDefault(1)?
+                .Children.FirstOrDefault()?
+                .Children.FirstOrDefault(n => n.TagName == "SEQUENCE");
+
+            if (authenticatedSafe is not null)
+            {
+                Label(authenticatedSafe, "AuthenticatedSafe", "One ContentInfo per protection mode");
+
+                foreach (var contentInfo in authenticatedSafe.Children)
+                {
+                    AnnotateContentInfo(contentInfo, "ContentInfo",
+                        "SafeContents — plain (data) or password-encrypted (encryptedData)");
+
+                    if (contentInfo.Children.FirstOrDefault()?.DecodedOid == OidNames.Pkcs7Data
+                        && contentInfo.Children.ElementAtOrDefault(1)?.Children.FirstOrDefault()?
+                            .Children.FirstOrDefault(n => n.TagName == "SEQUENCE") is { } safeContents)
+                    {
+                        AnnotateSafeContents(safeContents);
+                    }
+                }
+            }
+        }
+
+        if (c.Count > 2)
+        {
+            AnnotateMacData(c[2]);
+        }
+    }
+
+    private static void AnnotateSafeContents(Asn1Node node)
+    {
+        Label(node, "SafeContents", "A list of bags");
+
+        foreach (var bag in node.Children)
+        {
+            var bagId = bag.Children.FirstOrDefault()?.DecodedOid;
+            Label(bag, bagId is not null ? OidNames.For(bagId) ?? bagId : "SafeBag", "One bagged item");
+
+            if (bag.Children.Count > 0) Label(bag.Children[0], "bagId", "Bag type OID");
+            if (bag.Children.Count > 1)
+            {
+                Label(bag.Children[1], "bagValue", "The bag payload");
+                AnnotateBagValue(bagId, bag.Children[1]);
+            }
+            if (bag.Children.Count > 2)
+            {
+                Label(bag.Children[2], "bagAttributes", "Attributes (friendlyName, localKeyID)");
+                foreach (var attribute in bag.Children[2].Children)
+                {
+                    var attributeOid = attribute.Children.FirstOrDefault()?.DecodedOid;
+                    if (attributeOid is not null && OidNames.For(attributeOid) is { } friendly)
+                    {
+                        Label(attribute, friendly, "Bag attribute");
+                    }
+                }
+            }
+        }
+    }
+
+    private static void AnnotateBagValue(string? bagId, Asn1Node bagValue)
+    {
+        switch (bagId)
+        {
+            case OidNames.CertBag when bagValue.Children.FirstOrDefault() is { } certBag:
+                Label(certBag, "CertBag", "A wrapped certificate");
+                if (certBag.Children.Count > 0) Label(certBag.Children[0], "certId", "Certificate format");
+                if (certBag.Children.ElementAtOrDefault(1)?.Children.FirstOrDefault() is { } octet)
+                {
+                    Label(octet, "certValue", "DER certificate (OCTET STRING)");
+                    if (octet.Children.FirstOrDefault() is { } certificate)
+                    {
+                        AnnotateCertificate(certificate);
+                    }
+                }
+                break;
+
+            case OidNames.Pkcs8ShroudedKeyBag when bagValue.Children.FirstOrDefault() is { } shrouded:
+                Label(shrouded, "EncryptedPrivateKeyInfo", "Password-encrypted PKCS#8 key");
+                if (shrouded.Children.Count > 0)
+                {
+                    AnnotateAlgorithm(shrouded.Children[0], "encryptionAlgorithm", "Password-based encryption scheme");
+                    AnnotatePbes2(shrouded.Children[0]);
+                }
+                if (shrouded.Children.Count > 1)
+                {
+                    Label(shrouded.Children[1], "encryptedData", "SECRET — the encrypted private key");
+                }
+                break;
+        }
+    }
+
+    private static void AnnotateMacData(Asn1Node node)
+    {
+        Label(node, "macData", "Integrity check over the authSafe (password-derived HMAC)");
+        var c = node.Children;
+
+        if (c.Count > 0)
+        {
+            Label(c[0], "mac", "DigestInfo");
+            if (c[0].Children.Count > 0) AnnotateAlgorithm(c[0].Children[0], "digestAlgorithm", "HMAC digest algorithm");
+            if (c[0].Children.Count > 1) Label(c[0].Children[1], "digest", "The MAC value");
+        }
+        if (c.Count > 1) Label(c[1], "macSalt", "Salt for the MAC key derivation");
+        if (c.Count > 2) Label(c[2], "iterations", "MAC key derivation iterations");
     }
 }
