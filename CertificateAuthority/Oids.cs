@@ -43,6 +43,8 @@ public static class Oids
     public const string KeyUsage = "2.5.29.15";
     public const string SubjectAlternativeName = "2.5.29.17";
     public const string BasicConstraints = "2.5.29.19";
+    public const string CrlNumber = "2.5.29.20";
+    public const string CrlReasonCode = "2.5.29.21";
     public const string CrlDistributionPoints = "2.5.29.31";
     public const string AuthorityKeyIdentifier = "2.5.29.35";
     public const string ExtendedKeyUsage = "2.5.29.37";

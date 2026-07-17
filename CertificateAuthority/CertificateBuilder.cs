@@ -60,10 +60,9 @@ public sealed class CertificateBuilder
         signatureAlgorithm.Encode(writer);
         issuer.Encode(writer);
 
-        // validity: UTCTime before 2050, GeneralizedTime after (RFC 5280 §4.1.2.5)
         writer.PushSequence();
-        WriteTime(writer, NotBefore);
-        WriteTime(writer, NotAfter);
+        Der.WriteTime(writer, NotBefore);
+        Der.WriteTime(writer, NotAfter);
         writer.PopSequence();
 
         Subject.Encode(writer);
@@ -87,21 +86,6 @@ public sealed class CertificateBuilder
         writer.PopSequence();
 
         return writer.Encode();
-    }
-
-    private static void WriteTime(AsnWriter writer, DateTimeOffset value)
-    {
-        var truncated = new DateTimeOffset(value.UtcDateTime.Year, value.UtcDateTime.Month, value.UtcDateTime.Day,
-            value.UtcDateTime.Hour, value.UtcDateTime.Minute, value.UtcDateTime.Second, TimeSpan.Zero);
-
-        if (truncated.Year < 2050)
-        {
-            writer.WriteUtcTime(truncated);
-        }
-        else
-        {
-            writer.WriteGeneralizedTime(truncated, omitFractionalSeconds: true);
-        }
     }
 
     private static byte[] CreateRandomSerialNumber()

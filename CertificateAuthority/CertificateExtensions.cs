@@ -53,6 +53,15 @@ public static class CertificateExtensions
         return new CertificateExtension(Oids.AuthorityKeyIdentifier, Critical: false, writer.Encode());
     }
 
+    /// <summary>RFC 5280 §5.2.3 CRLNumber (monotonically increasing per CRL scope).</summary>
+    public static CertificateExtension CrlNumber(ulong value)
+    {
+        var writer = new AsnWriter(AsnEncodingRules.DER);
+        writer.WriteInteger(value);
+
+        return new CertificateExtension(Oids.CrlNumber, Critical: false, writer.Encode());
+    }
+
     public static CertificateExtension ExtendedKeyUsage(params string[] purposeOids)
     {
         var writer = new AsnWriter(AsnEncodingRules.DER);
