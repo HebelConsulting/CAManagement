@@ -115,6 +115,18 @@ public sealed class Pkcs11Options
   arm64 `libsofthsm2.so`. `caconsole info` needs an initialized token in the
   active `SOFTHSM2_CONF`; the default config reports `CKR_TOKEN_NOT_RECOGNIZED`.
 
+## Project naming (renamed 2026-07-17)
+Projects/namespaces were renamed to dotted product names — earlier sections may
+use the old names:
+`Pkcs11Interop` → `CAManagement.Pkcs11` (removed the collision with the
+third-party library of the same name), `CertificateAuthority` →
+`CAManagement.X509` (frees the type name; content is X.509/DER authoring),
+`Pkcs11Signing` → `CAManagement.Pkcs11.Signing`, `CAConsole` →
+`CAManagement.Cli` (not `.Console` — a `Console` namespace segment hijacks
+unqualified `System.Console` references; binary remains `caconsole`),
+`CAManagementTests` → `CAManagement.Tests`. Longer NuGet `PackageId`s (e.g.
+`HebelConsulting.*`) can be layered on at packaging time without renaming again.
+
 ## Distinguished names (added 2026-07-17)
 - `DistinguishedName.Parse` accepts the OpenSSL slash form (`/C=CH/O=…/CN=…`,
   `\/`-escaping) and the comma form; values may carry a string-type annotation
@@ -140,7 +152,7 @@ public sealed class Pkcs11Options
 |---|-------|----------|
 | D1 | Encoding primitive | **`System.Formats.Asn1`** (`AsnWriter`/`AsnReader`, DER). We author every structure; we do not re-implement TLV. |
 | D2 | Structure modeling | **Own DER models** (`TbsCertificate`, `DistinguishedName`, `AlgorithmIdentifier`, SPKI, extensions). Framework X.509 types are used in *tests only* as an independent verifier. |
-| D3 | Layout | **Split**: `CertificateAuthority` (pure, no Pkcs11Interop reference, exposes `ICertificateSigner`) + `Pkcs11Signing` adapter (references both; owns the ECDSA raw r&#124;&#124;s → DER conversion). |
+| D3 | Layout | **Split**: `CAManagement.X509` (pure, no PKCS#11 reference, exposes `ICertificateSigner`) + `CAManagement.Pkcs11.Signing` adapter (references both; owns the ECDSA raw r&#124;&#124;s → DER conversion). |
 | D4 | Scope | v1 ✅ + v2 ✅ + v3 ✅ (2026-07-17): Name/AlgId/OIDs/SPKI/TBS + core extensions, self-signed CA + issue cert, PKCS#10 CSR intake (PoP verified in Decode), CRL building, OCSP (request decode incl. nonce, signed BasicOCSPResponse builder, error responses), chain helpers (`CertificateValidation` — a deliberate thin wrapper over `X509Chain` with custom root trust; path validation is framework territory, same reasoning as D1 for TLV — and `CertificateBundle` for PEM bundles + own-DER certs-only PKCS#7). Note: LibreSSL 3.3.6's `ocsp` client fails nonce checks even against its own responder — nonce echo is asserted byte-exactly in our tests instead. |
 | D5 | CA state | v1 **stateless** (caller supplies serial/validity; random 16-byte serials by default). State design deferred to the CRL phase. |
 | D6 | Testing | Unit: DER golden vectors, `AsnReader` round trips, software-key signing. Integration: HSM-key CA issues certs validated by `X509Certificate2`/`X509Chain`; CRLs cross-checked by framework `Load`, manual signature verify, and openssl. CLI: `ConsoleEndToEndTests` builds the caconsole binary and drives init-ca → issue → revoke → gen-crl → asn as child processes against a throwaway token. |

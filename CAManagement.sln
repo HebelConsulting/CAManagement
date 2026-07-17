@@ -1,14 +1,14 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pkcs11Interop", "src\Pkcs11Interop\Pkcs11Interop.csproj", "{B920AE08-DDC7-46C7-B2F6-8B444EBDD932}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CAManagement.Pkcs11", "src\CAManagement.Pkcs11\CAManagement.Pkcs11.csproj", "{B920AE08-DDC7-46C7-B2F6-8B444EBDD932}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CAConsole", "src\CAConsole\CAConsole.csproj", "{56D3E88B-DDF5-47EF-B874-096B3600619B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CAManagement.Cli", "src\CAManagement.Cli\CAManagement.Cli.csproj", "{56D3E88B-DDF5-47EF-B874-096B3600619B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CAManagementTests", "src\CAManagementTests\CAManagementTests.csproj", "{06873651-8FE2-4FBD-A2CF-6B100DBFE334}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CAManagement.Tests", "src\CAManagement.Tests\CAManagement.Tests.csproj", "{06873651-8FE2-4FBD-A2CF-6B100DBFE334}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CertificateAuthority", "src\CertificateAuthority\CertificateAuthority.csproj", "{FD225A64-924C-4985-8174-6E9BAAA52D40}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CAManagement.X509", "src\CAManagement.X509\CAManagement.X509.csproj", "{FD225A64-924C-4985-8174-6E9BAAA52D40}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pkcs11Signing", "src\Pkcs11Signing\Pkcs11Signing.csproj", "{D1E990FC-F455-4652-AF7B-F9BA491F20BC}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CAManagement.Pkcs11.Signing", "src\CAManagement.Pkcs11.Signing\CAManagement.Pkcs11.Signing.csproj", "{D1E990FC-F455-4652-AF7B-F9BA491F20BC}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
