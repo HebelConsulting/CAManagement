@@ -7,9 +7,9 @@ using Spectre.Console.Cli;
 namespace CAManagement.Cli.Commands;
 
 /// <summary>Records a revocation in the CA state (published with gen-crl).</summary>
-public sealed class RevokeCommand(HsmCa hsm) : Command<RevokeCommand.Settings>
+public sealed class RevokeCommand : Command<RevokeCommand.Settings>
 {
-    public sealed class Settings : CommandSettings
+    public sealed class Settings : HsmSettings
     {
         [CommandOption("--serial <HEX>")]
         [Description("Serial number of the certificate to revoke (hex).")]
@@ -28,8 +28,6 @@ public sealed class RevokeCommand(HsmCa hsm) : Command<RevokeCommand.Settings>
         [Description("Token label of the CA key pair (required with --state token).")]
         public string? CaLabel { get; init; }
 
-        [CommandOption("--pin <PIN>")]
-        public string? Pin { get; init; }
 
         public override ValidationResult Validate() =>
             CaStateStores.IsToken(State) && CaLabel is null
@@ -39,9 +37,9 @@ public sealed class RevokeCommand(HsmCa hsm) : Command<RevokeCommand.Settings>
 
     protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
-        using var hsmScope = hsm;
+        using var hsm = new HsmCa();
         ICaStateStore store = CaStateStores.IsToken(settings.State)
-            ? new TokenCaStateStore(hsm.OpenLoggedInSession(settings.Pin), settings.CaLabel!)
+            ? new TokenCaStateStore(hsm.OpenLoggedInSession(settings), settings.CaLabel!)
             : new FileCaStateStore(settings.State);
 
         var serial = Convert.FromHexString(settings.Serial.Length % 2 == 0 ? settings.Serial : $"0{settings.Serial}");

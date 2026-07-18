@@ -29,7 +29,7 @@ public sealed class ConsoleEndToEndTests
             var environment = ProvisionToken(workDir.FullName);
 
             // --- init-ca ---------------------------------------------------------
-            var initCa = Run(binary, ["init-ca", "--label", "e2e-root",
+            var initCa = Run(binary, ["init-ca", "--token-label", "e2e-token", "--pin", UserPin, "--label", "e2e-root",
                 "--subject", "C=CH, O=Hebel Consulting, CN=E2E Root CA", "--out", "ca.crt"], workDir.FullName, environment);
             Assert.True(initCa.ExitCode == 0, $"init-ca failed: {initCa.Output}");
 
@@ -44,7 +44,7 @@ public sealed class ConsoleEndToEndTests
                 leafKey, HashAlgorithmName.SHA256).CreateSigningRequest();
             File.WriteAllText(Path.Combine(workDir.FullName, "leaf.csr"), Pem.Encode("CERTIFICATE REQUEST", csrDer));
 
-            var issue = Run(binary, ["issue", "--ca-label", "e2e-root",
+            var issue = Run(binary, ["issue", "--token-label", "e2e-token", "--pin", UserPin, "--ca-label", "e2e-root",
                 "--ca-cert", "ca.crt", "--csr", "leaf.csr", "--out", "leaf.crt"], workDir.FullName, environment);
             Assert.True(issue.ExitCode == 0, $"issue failed: {issue.Output}");
 
@@ -60,7 +60,7 @@ public sealed class ConsoleEndToEndTests
             Assert.True(File.Exists(Path.Combine(workDir.FullName, "ca-state.json")));
 
             // --- gen-crl ---------------------------------------------------------
-            var genCrl = Run(binary, ["gen-crl", "--ca-label", "e2e-root",
+            var genCrl = Run(binary, ["gen-crl", "--token-label", "e2e-token", "--pin", UserPin, "--ca-label", "e2e-root",
                 "--ca-cert", "ca.crt", "--out", "ca.crl"], workDir.FullName, environment);
             Assert.True(genCrl.ExitCode == 0, $"gen-crl failed: {genCrl.Output}");
 
@@ -80,7 +80,7 @@ public sealed class ConsoleEndToEndTests
                     "-reqout", "ocsp-req.der", "-no_nonce"], workDir.FullName, environment);
                 Assert.True(reqGen.ExitCode == 0, $"openssl request generation failed: {reqGen.Output}");
 
-                var respond = Run(binary, ["ocsp-respond", "--ca-label", "e2e-root", "--ca-cert", "ca.crt",
+                var respond = Run(binary, ["ocsp-respond", "--token-label", "e2e-token", "--pin", UserPin, "--ca-label", "e2e-root", "--ca-cert", "ca.crt",
                     "--reqin", "ocsp-req.der", "--respout", "ocsp-resp.der"], workDir.FullName, environment);
                 Assert.True(respond.ExitCode == 0, $"ocsp-respond failed: {respond.Output}");
 
@@ -95,7 +95,7 @@ public sealed class ConsoleEndToEndTests
             if (opensslAvailable)
             {
                 var port = FreeTcpPort();
-                using var server = StartBackground(binary, ["ocsp-respond", "--ca-label", "e2e-root",
+                using var server = StartBackground(binary, ["ocsp-respond", "--token-label", "e2e-token", "--pin", UserPin, "--ca-label", "e2e-root",
                     "--ca-cert", "ca.crt", "--listen", $"http://127.0.0.1:{port}/", "--max-requests", "1"],
                     workDir.FullName, environment);
 
@@ -116,10 +116,10 @@ public sealed class ConsoleEndToEndTests
             // Fresh store (independent of ca-state.json); revoke and gen-crl run in
             // separate processes, so the state provably persists on the token.
             var tokenRevoke = Run(binary, ["revoke", "--serial", leafCertificate.SerialNumber,
-                "--reason", "Superseded", "--state", "token", "--ca-label", "e2e-root"], workDir.FullName, environment);
+                "--reason", "Superseded", "--state", "token", "--ca-label", "e2e-root", "--token-label", "e2e-token", "--pin", UserPin], workDir.FullName, environment);
             Assert.True(tokenRevoke.ExitCode == 0, $"revoke --state token failed: {tokenRevoke.Output}");
 
-            var tokenGenCrl = Run(binary, ["gen-crl", "--ca-label", "e2e-root", "--ca-cert", "ca.crt",
+            var tokenGenCrl = Run(binary, ["gen-crl", "--token-label", "e2e-token", "--pin", UserPin, "--ca-label", "e2e-root", "--ca-cert", "ca.crt",
                 "--state", "token", "--out", "ca-token.crl"], workDir.FullName, environment);
             Assert.True(tokenGenCrl.ExitCode == 0, $"gen-crl --state token failed: {tokenGenCrl.Output}");
 
@@ -132,7 +132,7 @@ public sealed class ConsoleEndToEndTests
             // Revoking the same serial again reports it as already recorded — the
             // entry really was read back from the token, not from any file.
             var tokenRevokeAgain = Run(binary, ["revoke", "--serial", leafCertificate.SerialNumber,
-                "--reason", "Superseded", "--state", "token", "--ca-label", "e2e-root"], workDir.FullName, environment);
+                "--reason", "Superseded", "--state", "token", "--ca-label", "e2e-root", "--token-label", "e2e-token", "--pin", UserPin], workDir.FullName, environment);
             Assert.True(tokenRevokeAgain.ExitCode == 0, tokenRevokeAgain.Output);
             Assert.Contains("already revoked", tokenRevokeAgain.Output);
 
@@ -143,8 +143,8 @@ public sealed class ConsoleEndToEndTests
             Assert.Contains("serialNumber", asn.Output);
 
             // --- wrong PIN fails cleanly ----------------------------------------
-            var wrongPin = Run(binary, ["gen-crl", "--ca-label", "e2e-root",
-                "--ca-cert", "ca.crt", "--pin", "9999"], workDir.FullName, environment);
+            var wrongPin = Run(binary, ["gen-crl", "--token-label", "e2e-token", "--pin", "9999", "--ca-label", "e2e-root",
+                "--ca-cert", "ca.crt"], workDir.FullName, environment);
             Assert.NotEqual(0, wrongPin.ExitCode);
             Assert.Contains("CKR_PIN_INCORRECT", wrongPin.Output);
         }
@@ -196,8 +196,6 @@ public sealed class ConsoleEndToEndTests
         var environment = new Dictionary<string, string>
         {
             ["SOFTHSM2_CONF"] = configPath,
-            ["Pkcs11__TokenLabel"] = "e2e-token",
-            ["Pkcs11__UserPin"] = UserPin,
             ["NO_COLOR"] = "1",
         };
 

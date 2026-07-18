@@ -1,25 +1,27 @@
 using CAManagement.X509;
-using Microsoft.Extensions.Options;
 using CAManagement.Pkcs11;
-using CAManagement.Pkcs11.Configuration;
 using CAManagement.Pkcs11.DataStructures;
 using CAManagement.Pkcs11.Signing;
 using Spectre.Console;
 
 namespace CAManagement.Cli.Infrastructure;
 
-/// <summary>Shared HSM plumbing for the CA commands: session, login, key lookup.</summary>
-public sealed class HsmCa(Pkcs11Library library, IOptions<Pkcs11Options> options) : IDisposable
+/// <summary>
+/// Shared HSM plumbing for the CA commands: module loading, session, login and
+/// key lookup, driven entirely by <see cref="HsmSettings"/> CLI options.
+/// </summary>
+public sealed class HsmCa : IDisposable
 {
+    private Pkcs11Library? _library;
     private Pkcs11Session? _session;
     private LoginScope? _login;
 
-    public Pkcs11Session OpenLoggedInSession(string? pinOverride)
+    public Pkcs11Session OpenLoggedInSession(HsmSettings settings)
     {
-        _session = library.OpenSession();
+        _library = new Pkcs11Library(settings.ToPkcs11Options());
+        _session = _library.OpenSession();
 
-        var pin = pinOverride
-            ?? options.Value.UserPin
+        var pin = settings.Pin
             ?? AnsiConsole.Prompt(new TextPrompt<string>("User PIN:").Secret());
         _login = _session.Login(pin);
 
@@ -53,5 +55,6 @@ public sealed class HsmCa(Pkcs11Library library, IOptions<Pkcs11Options> options
     {
         _login?.Dispose();
         _session?.Dispose();
+        _library?.Dispose();
     }
 }

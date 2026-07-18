@@ -1,22 +1,12 @@
 using CAManagement.Cli.Commands;
 using CAManagement.Cli.Infrastructure;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using CAManagement.Pkcs11.DependencyInjection;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-var configuration = new ConfigurationBuilder()
-    .SetBasePath(AppContext.BaseDirectory)
-    .AddJsonFile("appsettings.json", optional: true)
-    .AddEnvironmentVariables()
-    .Build();
-
-var services = new ServiceCollection();
-services.AddPkcs11(configuration);
-services.AddTransient<HsmCa>();
-
-var app = new CommandApp(new TypeRegistrar(services));
+// All configuration is passed as CLI options with educated defaults (see
+// HsmSettings); there is no configuration file.
+var app = new CommandApp(new TypeRegistrar(new ServiceCollection()));
 app.Configure(config =>
 {
     config.SetApplicationName("caconsole");

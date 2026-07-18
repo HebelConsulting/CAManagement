@@ -18,24 +18,13 @@
 
     <ItemGroup>
         <PackageReference Include="Spectre.Console.Cli" Version="0.55.0" />
-        <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.10" />
-        <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.10" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
-        <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.10" />
-        <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.10" />
-        <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.10" />
     </ItemGroup>
 
     <ItemGroup>
         <ProjectReference Include="..\CAManagement.X509\CAManagement.X509.csproj" />
         <ProjectReference Include="..\CAManagement.Pkcs11\CAManagement.Pkcs11.csproj" />
         <ProjectReference Include="..\CAManagement.Pkcs11.Signing\CAManagement.Pkcs11.Signing.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
-        <None Update="appsettings.json">
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </None>
     </ItemGroup>
     
 </Project>

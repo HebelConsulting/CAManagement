@@ -115,6 +115,14 @@ public sealed class Pkcs11Options
   arm64 `libsofthsm2.so`. `caconsole info` needs an initialized token in the
   active `SOFTHSM2_CONF`; the default config reports `CKR_TOKEN_NOT_RECOGNIZED`.
 
+## CLI configuration (changed 2026-07-18)
+The CLI no longer reads `appsettings.json` or environment variables; all HSM
+parameters are CLI options with educated defaults (`HsmSettings`): `--module`
+(default: the platform's SoftHSM2 location), `--token-label` (default: first
+slot with a token present), `--slot` (overrides the label), `--pin` (default:
+interactive secret prompt). Decision #5 (`IOptions<Pkcs11Options>` binding)
+still holds for the *library* — hosts that want config files keep `AddPkcs11`.
+
 ## NuGet packaging (added 2026-07-18)
 - `scripts/pack.sh` packs the three libraries into `dist/nuget/`.
   **PackageIds carry the `HebelConsulting.` prefix** (reservable on nuget.org)
@@ -144,8 +152,8 @@ public sealed class Pkcs11Options
 
 ## Publishing (added 2026-07-17)
 - `scripts/publish.sh` builds self-contained single-file `caconsole` binaries
-  for **osx-arm64, osx-x64, linux-x64** into `dist/<rid>/` (binary +
-  `appsettings.json`; debug info embedded). No trimming (reflection-based DI)
+  for **osx-arm64, osx-x64, linux-x64** into `dist/<rid>/` (single binary;
+  debug info embedded). No trimming (reflection-based DI)
   and no ReadyToRun (keeps cross-OS publishing from macOS possible).
 - `InvariantGlobalization=true` on the CLI: self-contained does NOT bundle
   native OS deps — without it the Linux binary fail-fasts on missing libicu

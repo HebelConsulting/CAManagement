@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Publishes caconsole as a self-contained single-file binary for each supported
-# platform into dist/<rid>/. appsettings.json ships alongside the binary on
-# purpose (runtime-editable configuration). No trimming (reflection-based DI)
-# and no ReadyToRun (keeps cross-OS publishing from macOS possible).
+# platform into dist/<rid>/. Configuration is pure CLI options (no config
+# file). No trimming (reflection-based DI) and no ReadyToRun (keeps cross-OS
+# publishing from macOS possible).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

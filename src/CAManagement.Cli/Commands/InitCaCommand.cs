@@ -7,9 +7,9 @@ using Spectre.Console.Cli;
 namespace CAManagement.Cli.Commands;
 
 /// <summary>Generates a CA key pair on the token and writes a self-signed root certificate.</summary>
-public sealed class InitCaCommand(HsmCa hsm) : Command<InitCaCommand.Settings>
+public sealed class InitCaCommand : Command<InitCaCommand.Settings>
 {
-    public sealed class Settings : CommandSettings
+    public sealed class Settings : HsmSettings
     {
         [CommandOption("--label <LABEL>")]
         [Description("Token label for the CA key pair.")]
@@ -33,14 +33,12 @@ public sealed class InitCaCommand(HsmCa hsm) : Command<InitCaCommand.Settings>
         [DefaultValue("ca.crt")]
         public string Out { get; init; } = "ca.crt";
 
-        [CommandOption("--pin <PIN>")]
-        public string? Pin { get; init; }
     }
 
     protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
-        using var hsmScope = hsm;
-        var session = hsm.OpenLoggedInSession(settings.Pin);
+        using var hsm = new HsmCa();
+        var session = hsm.OpenLoggedInSession(settings);
 
         if (session.FindObjects(CAManagement.Pkcs11.DataStructures.CK_OBJECT_CLASS.CKO_PRIVATE_KEY, settings.Label).Count > 0)
         {

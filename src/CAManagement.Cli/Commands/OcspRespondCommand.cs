@@ -14,9 +14,9 @@ namespace CAManagement.Cli.Commands;
 /// RFC 6960 HTTP responder (--listen). Serials not in the revocation list are
 /// reported good (issuance is not tracked); foreign CertIDs are unknown.
 /// </summary>
-public sealed class OcspRespondCommand(HsmCa hsm) : Command<OcspRespondCommand.Settings>
+public sealed class OcspRespondCommand : Command<OcspRespondCommand.Settings>
 {
-    public sealed class Settings : CommandSettings
+    public sealed class Settings : HsmSettings
     {
         [CommandOption("--ca-label <LABEL>")]
         [Description("Token label of the CA key pair.")]
@@ -53,8 +53,6 @@ public sealed class OcspRespondCommand(HsmCa hsm) : Command<OcspRespondCommand.S
         [DefaultValue(0)]
         public int MaxRequests { get; init; }
 
-        [CommandOption("--pin <PIN>")]
-        public string? Pin { get; init; }
 
         public override ValidationResult Validate()
         {
@@ -73,8 +71,8 @@ public sealed class OcspRespondCommand(HsmCa hsm) : Command<OcspRespondCommand.S
 
     protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
-        using var hsmScope = hsm;
-        var session = hsm.OpenLoggedInSession(settings.Pin);
+        using var hsm = new HsmCa();
+        var session = hsm.OpenLoggedInSession(settings);
         var (signer, caSpki) = hsm.LoadCaKey(session, settings.CaLabel);
 
         var caCertificateDer = IssueCommand.ReadDer(settings.CaCert);
