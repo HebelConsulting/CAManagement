@@ -14,4 +14,6 @@ public enum DocumentKind
     Cms,
     OcspRequest,
     OcspResponse,
+    SshPublicKey,
+    OpenSshPrivateKey,
 }

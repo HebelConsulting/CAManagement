@@ -1,35 +1,106 @@
 using System.Diagnostics;
-using System.Text;
-using CAManagement.X509;
 using CAManagement.X509.Analysis;
 
 namespace CAManagement.Tests.Unit;
 
-public sealed class SshKeyAnalysisTests
+public sealed class SshKeyAnalysisTests : IDisposable
 {
     private static readonly bool SshKeygenAvailable = File.Exists("/usr/bin/ssh-keygen");
 
-    [Fact]
-    public void Openssh_public_key_gets_a_conversion_hint()
+    private readonly DirectoryInfo _workDir = Directory.CreateTempSubdirectory("ssh-analyze");
+
+    public void Dispose() => _workDir.Delete(recursive: true);
+
+    private string Keygen(string type, string passphrase = "", string comment = "test@analyzer")
     {
-        var line = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE user@host\n";
+        var keyPath = Path.Combine(_workDir.FullName, $"id_{type}_{Guid.NewGuid():N}");
+        Run("/usr/bin/ssh-keygen", ["-t", type, "-N", passphrase, "-C", comment, "-q", "-f", keyPath]);
 
-        var exception = Assert.Throws<FormatException>(() => Asn1Analyzer.Analyze(Encoding.UTF8.GetBytes(line)));
+        return keyPath;
+    }
 
-        Assert.Contains("SSH wire format", exception.Message);
-        Assert.Contains("ssh-keygen -e -m PKCS8", exception.Message);
-        Assert.Contains("Ed25519", exception.Message); // honest about the unconvertible case
+    private static IEnumerable<Asn1Node> Flatten(Asn1Node node)
+    {
+        yield return node;
+        foreach (var descendant in node.Children.SelectMany(Flatten))
+        {
+            yield return descendant;
+        }
     }
 
     [Fact]
-    public void Openssh_private_key_gets_a_conversion_hint()
+    public void Decodes_an_ed25519_public_key_line()
     {
-        var pem = Pem.Encode("OPENSSH PRIVATE KEY", "openssh-key-v1\0fake-payload"u8.ToArray());
+        if (!SshKeygenAvailable)
+        {
+            return;
+        }
 
-        var exception = Assert.Throws<FormatException>(() => Asn1Analyzer.Analyze(pem));
+        var document = Asn1Analyzer.Analyze(File.ReadAllBytes($"{Keygen("ed25519")}.pub"));
 
-        Assert.Contains("openssh-key-v1", exception.Message);
-        Assert.Contains("ssh-keygen -p", exception.Message);
+        Assert.Equal(DocumentKind.SshPublicKey, document.Kind);
+        var nodes = Flatten(document.Root).ToList();
+        Assert.Contains(nodes, n => n is { Name: "key type", Value: "\"ssh-ed25519\"" });
+        Assert.Contains(nodes, n => n is { Name: "public key", Length: 36 }); // 4-byte length + 32 key bytes
+        Assert.Contains(nodes, n => n is { Name: "comment", Value: "\"test@analyzer\"" });
+    }
+
+    [Fact]
+    public void Decodes_an_rsa_public_key_line_with_mpints()
+    {
+        if (!SshKeygenAvailable)
+        {
+            return;
+        }
+
+        var document = Asn1Analyzer.Analyze(File.ReadAllBytes($"{Keygen("rsa")}.pub"));
+
+        var nodes = Flatten(document.Root).ToList();
+        Assert.Contains(nodes, n => n is { Name: "e", TagName: "mpint", Value: "65537" });
+        Assert.Contains(nodes, n => n is { Name: "n", TagName: "mpint" });
+    }
+
+    [Fact]
+    public void Decodes_an_unencrypted_ed25519_private_key()
+    {
+        if (!SshKeygenAvailable)
+        {
+            return;
+        }
+
+        var document = Asn1Analyzer.Analyze(File.ReadAllBytes(Keygen("ed25519")));
+
+        Assert.Equal(DocumentKind.OpenSshPrivateKey, document.Kind);
+        var nodes = Flatten(document.Root).ToList();
+        Assert.Contains(nodes, n => n is { Name: "ciphername", Value: "\"none\"" });
+        Assert.Contains(nodes, n => n is { Name: "publickey" }); // embedded public blob…
+        Assert.Contains(nodes, n => n is { Name: "key type", Value: "\"ssh-ed25519\"" }); // …parsed inside
+        Assert.Contains(nodes, n => n is { Name: "private key" } && n.Explanation!.Contains("SECRET"));
+        Assert.Contains(nodes, n => n is { Name: "comment", Value: "\"test@analyzer\"" });
+        // "test@analyzer" makes the section land exactly on the 8-byte block
+        // boundary — no padding. A one-char comment forces padding bytes.
+        var padded = Asn1Analyzer.Analyze(File.ReadAllBytes(Keygen("ed25519", comment: "x")));
+        Assert.Contains(Flatten(padded.Root), n => n.Name == "padding");
+    }
+
+    [Fact]
+    public void Encrypted_private_key_shows_kdf_parameters_but_keeps_secrets_opaque()
+    {
+        if (!SshKeygenAvailable)
+        {
+            return;
+        }
+
+        var document = Asn1Analyzer.Analyze(File.ReadAllBytes(Keygen("ed25519", passphrase: "test-passphrase")));
+
+        var nodes = Flatten(document.Root).ToList();
+        Assert.Contains(nodes, n => n is { Name: "ciphername" } && n.Value!.Contains("aes256"));
+        Assert.Contains(nodes, n => n is { Name: "kdfname", Value: "\"bcrypt\"" });
+        Assert.Contains(nodes, n => n is { Name: "salt" });
+        Assert.Contains(nodes, n => n is { Name: "rounds" });
+        var privateSection = nodes.Single(n => n.Name == "private section");
+        Assert.Contains("SECRET", privateSection.Explanation!);
+        Assert.Empty(privateSection.Children); // no decode without the passphrase
     }
 
     [Fact]
@@ -58,26 +129,15 @@ public sealed class SshKeyAnalysisTests
             return;
         }
 
-        var workDir = Directory.CreateTempSubdirectory("ssh-analyze");
-        try
-        {
-            var keyPath = Path.Combine(workDir.FullName, "id_ecdsa");
-            Run("/usr/bin/ssh-keygen", ["-t", "ecdsa", "-N", "", "-q", "-f", keyPath]);
+        var keyPath = Keygen("ecdsa");
 
-            // Public key: ssh-keygen -e -m PKCS8 prints a PUBLIC KEY PEM to stdout.
-            var publicPem = Run("/usr/bin/ssh-keygen", ["-e", "-m", "PKCS8", "-f", $"{keyPath}.pub"]);
-            var publicDocument = Asn1Analyzer.Analyze(publicPem);
-            Assert.Equal(DocumentKind.SubjectPublicKeyInfo, publicDocument.Kind);
+        // Public key: ssh-keygen -e -m PKCS8 prints a PUBLIC KEY PEM to stdout.
+        var publicPem = Run("/usr/bin/ssh-keygen", ["-e", "-m", "PKCS8", "-f", $"{keyPath}.pub"]);
+        Assert.Equal(DocumentKind.SubjectPublicKeyInfo, Asn1Analyzer.Analyze(publicPem).Kind);
 
-            // Private key: ssh-keygen -p -m PKCS8 converts the file in place.
-            Run("/usr/bin/ssh-keygen", ["-p", "-N", "", "-m", "PKCS8", "-q", "-f", keyPath]);
-            var privateDocument = Asn1Analyzer.Analyze(File.ReadAllBytes(keyPath));
-            Assert.Equal(DocumentKind.Pkcs8PrivateKey, privateDocument.Kind);
-        }
-        finally
-        {
-            workDir.Delete(recursive: true);
-        }
+        // Private key: ssh-keygen -p -m PKCS8 converts the file in place.
+        Run("/usr/bin/ssh-keygen", ["-p", "-N", "", "-m", "PKCS8", "-q", "-f", keyPath]);
+        Assert.Equal(DocumentKind.Pkcs8PrivateKey, Asn1Analyzer.Analyze(File.ReadAllBytes(keyPath)).Kind);
     }
 
     private static string Run(string fileName, string[] arguments)

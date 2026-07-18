@@ -24,14 +24,20 @@ public static class Asn1Analyzer
             return Analyze(Encoding.UTF8.GetString(data));
         }
 
-        ThrowIfSshPublicKey(Encoding.UTF8.GetString(data, 0, Math.Min(data.Length, 64)));
+        if (IsSshPublicKeyText(Encoding.UTF8.GetString(data, 0, Math.Min(data.Length, 64))))
+        {
+            return SshKeyAnalyzer.AnalyzePublicKeyLine(Encoding.UTF8.GetString(data));
+        }
 
         return AnalyzeDer(data, pemLabel: null);
     }
 
     public static AnalyzedDocument Analyze(string pemText)
     {
-        ThrowIfSshPublicKey(pemText);
+        if (IsSshPublicKeyText(pemText))
+        {
+            return SshKeyAnalyzer.AnalyzePublicKeyLine(pemText);
+        }
 
         var pem = Pem.TryDecodeFirst(pemText)
             ?? throw new FormatException("No PEM block found in the input.");
@@ -39,26 +45,18 @@ public static class Asn1Analyzer
         return AnalyzeDer(pem.Der, pem.Label);
     }
 
-    private static void ThrowIfSshPublicKey(string text)
+    private static bool IsSshPublicKeyText(string text)
     {
         var start = text.TrimStart();
-        if (SshPublicKeyPrefixes.Any(prefix => start.StartsWith(prefix, StringComparison.Ordinal)))
-        {
-            throw new FormatException(
-                "OpenSSH public keys use the SSH wire format (RFC 4253), not ASN.1. " +
-                "RSA and ECDSA keys can be converted with 'ssh-keygen -e -m PKCS8 -f <file>'; " +
-                "Ed25519 keys cannot leave OpenSSH's own format.");
-        }
+        return SshPublicKeyPrefixes.Any(prefix => start.StartsWith(prefix, StringComparison.Ordinal));
     }
 
     public static AnalyzedDocument AnalyzeDer(byte[] der, string? pemLabel)
     {
+        // Not ASN.1 at all — hand over to the SSH wire-format renderer.
         if (pemLabel == "OPENSSH PRIVATE KEY")
         {
-            throw new FormatException(
-                "OpenSSH private keys use the proprietary 'openssh-key-v1' container, not ASN.1. " +
-                "RSA and ECDSA keys can be converted on a copy with 'ssh-keygen -p -m PKCS8 -f <copy>'; " +
-                "Ed25519 keys cannot leave OpenSSH's own format.");
+            return SshKeyAnalyzer.AnalyzeOpenSshPrivateKey(der);
         }
 
         var roots = Asn1TreeParser.Parse(der);

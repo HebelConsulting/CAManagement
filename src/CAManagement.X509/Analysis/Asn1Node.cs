@@ -18,6 +18,9 @@ public sealed class Asn1Node
     /// <summary>Dotted OID when the node is an OBJECT IDENTIFIER (for annotators).</summary>
     public string? DecodedOid { get; init; }
 
+    /// <summary>Raw content bytes for non-ASN.1 wire nodes (e.g. SSH strings), for nested parsing.</summary>
+    public byte[]? RawContent { get; init; }
+
     /// <summary>Schema field name set by an annotator, e.g. "serialNumber".</summary>
     public string? Name { get; set; }
 
