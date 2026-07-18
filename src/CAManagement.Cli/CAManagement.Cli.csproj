@@ -8,7 +8,6 @@
         <PublishSingleFile>true</PublishSingleFile>
         <SelfContained>true</SelfContained>
         <RuntimeIdentifier>osx-arm64</RuntimeIdentifier>
-        <PackageOutputPath>./nupkg</PackageOutputPath>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <Company>Hebel Consulting GmbH</Company>
         <AssemblyName>caconsole</AssemblyName>
@@ -37,18 +36,6 @@
         <None Update="appsettings.json">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
-    </ItemGroup>
-    
-    <ItemGroup>
-        <Compile Remove="nupkg\**" />
-    </ItemGroup>
-    
-    <ItemGroup>
-        <EmbeddedResource Remove="nupkg\**" />
-    </ItemGroup>
-    
-    <ItemGroup>
-        <None Remove="nupkg\**" />
     </ItemGroup>
     
 </Project>

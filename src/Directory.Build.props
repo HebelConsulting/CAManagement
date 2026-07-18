@@ -1,0 +1,28 @@
+<Project>
+
+    <PropertyGroup>
+        <!-- Single version for all packages; bump here. -->
+        <Version>0.1.0</Version>
+
+        <Company>Hebel Consulting GmbH</Company>
+        <Authors>Hebel Consulting GmbH</Authors>
+        <Copyright>© Hebel Consulting GmbH</Copyright>
+
+        <!-- Packing is opt-in per library project. -->
+        <IsPackable>false</IsPackable>
+
+        <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+        <PackageProjectUrl>https://github.com/HebelConsulting/CAManagement</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/HebelConsulting/CAManagement</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+
+        <!-- Debug info inside the assemblies; no separate symbol packages. -->
+        <DebugType>embedded</DebugType>
+    </PropertyGroup>
+
+    <ItemGroup Condition="'$(IsPackable)' == 'true'">
+        <None Include="README.md" Pack="true" PackagePath="/" />
+    </ItemGroup>
+
+</Project>

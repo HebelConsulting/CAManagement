@@ -4,6 +4,9 @@
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <IsPackable>true</IsPackable>
+        <PackageId>HebelConsulting.CAManagement.X509</PackageId>
+        <Description>X.509/DER authoring on System.Formats.Asn1: certificate issuance, PKCS#10 CSR intake, CRLs, OCSP, chain validation and a certutil-style ASN.1 analyzer.</Description>
     </PropertyGroup>
 
 </Project>

@@ -115,6 +115,20 @@ public sealed class Pkcs11Options
   arm64 `libsofthsm2.so`. `caconsole info` needs an initialized token in the
   active `SOFTHSM2_CONF`; the default config reports `CKR_TOKEN_NOT_RECOGNIZED`.
 
+## NuGet packaging (added 2026-07-18)
+- `scripts/pack.sh` packs the three libraries into `dist/nuget/`.
+  **PackageIds carry the `HebelConsulting.` prefix** (reservable on nuget.org)
+  while assemblies/namespaces stay `CAManagement.*`; project references map to
+  prefixed package dependencies automatically.
+- Shared metadata in `src/Directory.Build.props`: single `Version` (0.1.0),
+  Apache-2.0 expression, repository URL, per-package README, embedded debug
+  info (no symbol packages). Packing is opt-in per library; CLI and tests are
+  not packable.
+- Verified by consuming from a scratch project via a local feed: transitive
+  dependency resolution plus real API usage (DN parse, issuance, validation).
+- Publishing to nuget.org (API key, prefix reservation, CI) is a manual step
+  left to the maintainer.
+
 ## CA state on token (added 2026-07-18, closes the D5 deferral)
 - `--state token` on revoke/gen-crl/ocsp-respond keeps the CA state (CRL
   number + revocations, same JSON as the file store) as a CKO_DATA object

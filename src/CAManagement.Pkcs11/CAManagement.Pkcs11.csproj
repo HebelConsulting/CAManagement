@@ -5,6 +5,9 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <IsPackable>true</IsPackable>
+        <PackageId>HebelConsulting.CAManagement.Pkcs11</PackageId>
+        <Description>PKCS#11 v2.40 interop via C_GetFunctionList delegates: sessions, key generation, sign/verify, object management. Configurable module (SoftHSM2, YubiKey, ...).</Description>
     </PropertyGroup>
 
     <ItemGroup>
