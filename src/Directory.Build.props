@@ -5,7 +5,7 @@
         <Version>0.1.0</Version>
 
         <Company>Hebel Consulting GmbH</Company>
-        <Authors>Hebel Consulting GmbH</Authors>
+        <Authors>Florian Hebel</Authors>
         <Copyright>© Hebel Consulting GmbH</Copyright>
 
         <!-- Packing is opt-in per library project. -->
