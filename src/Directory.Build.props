@@ -17,6 +17,9 @@
         <RepositoryType>git</RepositoryType>
         <PackageReadmeFile>README.md</PackageReadmeFile>
 
+        <!-- Allow building net10.0-windows TFMs from macOS/Linux. -->
+        <EnableWindowsTargeting>true</EnableWindowsTargeting>
+
         <!-- Debug info inside the assemblies; no separate symbol packages. -->
         <DebugType>embedded</DebugType>
     </PropertyGroup>

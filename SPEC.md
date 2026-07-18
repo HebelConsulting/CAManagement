@@ -115,6 +115,25 @@ public sealed class Pkcs11Options
   arm64 `libsofthsm2.so`. `caconsole info` needs an initialized token in the
   active `SOFTHSM2_CONF`; the default config reports `CKR_TOKEN_NOT_RECOGNIZED`.
 
+## Windows port (added 2026-07-19 — realizes decision #4)
+- `CAManagement.Pkcs11`, `CAManagement.Pkcs11.Signing` and the CLI multi-target
+  **net10.0 (Unix LP64) + net10.0-windows (LLP64)**: the `WINDOWS` symbol flips
+  `NativeULong` to `UInt32` and `Pkcs11Layout.Pack` to 1 (Windows' pkcs11.h
+  `#pragma pack(1)`), wired into every marshalled struct. A compile-time width
+  guard in `Pkcs11Layout` fails the build if alias and platform disagree; a
+  `#error` probe verified the symbol fires exactly on the -windows TFM.
+  Enum `UL` suffixes were stripped (illegal initializers under a uint backing;
+  unsuffixed hex fits both widths); width-dependent reads use `MemoryMarshal`.
+  `CAManagement.X509` has no native ABI and stays single-TFM.
+- Windows module default: `softhsm2-x64.dll`. `publish.sh` adds **win-x64**
+  (`caconsole.exe`, PE32+ verified). NuGet packages carry both TFM assets.
+- **Consumer caveat**: a Windows app must target `net10.0-windows` to get the
+  LLP64 asset — a plain `net10.0` app on Windows would silently pick the LP64
+  assembly and corrupt every CK_ULONG.
+- **Remaining (needs a Windows machine)**: runtime verification against
+  SoftHSM2's Windows build — struct sizes, the full test suite, and the CLI
+  lifecycle. Everything up to that point is compile-time-proven only.
+
 ## CLI configuration (changed 2026-07-18)
 The CLI no longer reads `appsettings.json` or environment variables; all HSM
 parameters are CLI options with educated defaults (`HsmSettings`): `--module`

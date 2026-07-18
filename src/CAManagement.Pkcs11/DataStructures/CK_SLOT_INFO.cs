@@ -4,7 +4,7 @@ namespace CAManagement.Pkcs11.DataStructures;
 
 // Unix LP64 natural alignment (SPEC #4). Pack=1 here would drop the trailing
 // padding after the CK_ULONG flags and under-size the marshalled buffer.
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = Pkcs11Layout.Pack)]
 public struct CK_SLOT_INFO
 {
     public InlineArray64 SlotDescription;

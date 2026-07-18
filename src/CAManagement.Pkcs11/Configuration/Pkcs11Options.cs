@@ -33,7 +33,7 @@ public sealed class Pkcs11Options
         false => RuntimeInformation.IsOSPlatform(OSPlatform.Linux) switch
         {
             true => "/usr/lib/softhsm/libsofthsm2.so",
-            false => "libsofthsm2.so", // Windows/other: expect an explicit override
+            false => "softhsm2-x64.dll", // Windows: SoftHSM2 installer module name
         },
     };
 }

@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 // ReSharper disable InconsistentNaming
 namespace CAManagement.Pkcs11.DataStructures;
 
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = Pkcs11Layout.Pack)]
 public struct CK_FUNCTION_LIST
 {
     public CK_VERSION Version;

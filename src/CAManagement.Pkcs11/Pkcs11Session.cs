@@ -109,11 +109,9 @@ public sealed class Pkcs11Session : IDisposable
         (CK_KEY_TYPE)ToNativeULong(GetAttributeValue(objectHandle, CKA_KEY_TYPE));
 
     // CK_ULONG-valued attributes carry NativeULong-width little-endian bytes.
-    private static NativeULong ToNativeULong(byte[] value) => value.Length switch
-    {
-        sizeof(NativeULong) => BitConverter.ToUInt64(value),
-        _ => throw new InvalidOperationException($"Expected a {sizeof(NativeULong)}-byte CK_ULONG value but got {value.Length} bytes."),
-    };
+    private static NativeULong ToNativeULong(byte[] value) => value.Length == sizeof(NativeULong)
+        ? System.Runtime.InteropServices.MemoryMarshal.Read<NativeULong>(value)
+        : throw new InvalidOperationException($"Expected a {sizeof(NativeULong)}-byte CK_ULONG value but got {value.Length} bytes.");
 
     public IReadOnlyList<NativeULong> FindObjects(CK_OBJECT_CLASS objectClass, CK_KEY_TYPE keyType)
     {

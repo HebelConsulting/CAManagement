@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace CAManagement.Pkcs11.DataStructures;
 
 /// <summary>ASCII date fields, e.g. year "2026", month "07", day "17".</summary>
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = Pkcs11Layout.Pack)]
 public struct CK_DATE
 {
     public InlineArray4 Year;

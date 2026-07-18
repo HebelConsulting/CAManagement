@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 
 namespace CAManagement.Pkcs11.DataStructures;
 
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = Pkcs11Layout.Pack)]
 public struct CK_C_INITIALIZE_ARGS
 {
     public CK_C_INITIALIZE_ARGS() {}

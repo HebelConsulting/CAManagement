@@ -23,7 +23,7 @@ public class HsmSettings : CommandSettings
 
     [CommandOption("--slot <ID>")]
     [Description("Explicit slot id (overrides --token-label).")]
-    public ulong? Slot { get; init; }
+    public NativeULong? Slot { get; init; }
 
     internal Pkcs11Options ToPkcs11Options()
     {
