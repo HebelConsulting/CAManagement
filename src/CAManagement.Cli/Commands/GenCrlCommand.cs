@@ -20,7 +20,8 @@ public sealed class GenCrlCommand(HsmCa hsm) : Command<GenCrlCommand.Settings>
         [Description("The CA certificate (PEM or DER); its subject becomes the CRL issuer.")]
         public required string CaCert { get; init; }
 
-        [CommandOption("--state <FILE>")]
+        [CommandOption("--state <FILE|token>")]
+        [Description("CA state file path, or 'token' to keep state as a data object on the HSM token.")]
         [DefaultValue("ca-state.json")]
         public string State { get; init; } = "ca-state.json";
 
@@ -46,7 +47,10 @@ public sealed class GenCrlCommand(HsmCa hsm) : Command<GenCrlCommand.Settings>
         // The CRL issuer is the CA certificate's subject (byte-faithful extraction).
         var issuer = X509Names.SubjectOf(File.ReadAllBytes(settings.CaCert));
 
-        var state = CaStateFile.Load(settings.State);
+        ICaStateStore store = CaStateStores.IsToken(settings.State)
+            ? new TokenCaStateStore(session, settings.CaLabel)
+            : new FileCaStateStore(settings.State);
+        var state = store.Load();
         state.CrlNumber++;
 
         var crlDer = new CrlBuilder
@@ -62,7 +66,7 @@ public sealed class GenCrlCommand(HsmCa hsm) : Command<GenCrlCommand.Settings>
         }.Sign(signer);
 
         File.WriteAllText(settings.Out, Pem.Encode("X509 CRL", crlDer));
-        state.Save(settings.State);
+        store.Save(state);
 
         AnsiConsole.MarkupLine($"[green]CRL #{state.CrlNumber}[/] with {state.Revoked.Count} entr{(state.Revoked.Count == 1 ? "y" : "ies")} " +
             $"written to [blue]{settings.Out}[/] (next update in {settings.Days} days).");

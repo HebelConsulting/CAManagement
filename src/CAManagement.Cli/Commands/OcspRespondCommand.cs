@@ -26,7 +26,8 @@ public sealed class OcspRespondCommand(HsmCa hsm) : Command<OcspRespondCommand.S
         [Description("The CA certificate (PEM or DER); embedded in responses for verification.")]
         public required string CaCert { get; init; }
 
-        [CommandOption("--state <FILE>")]
+        [CommandOption("--state <FILE|token>")]
+        [Description("CA state file path, or 'token' to keep state as a data object on the HSM token.")]
         [DefaultValue("ca-state.json")]
         public string State { get; init; } = "ca-state.json";
 
@@ -81,7 +82,10 @@ public sealed class OcspRespondCommand(HsmCa hsm) : Command<OcspRespondCommand.S
 
         var responder = new OcspResponderService(
             caCertificate.SubjectName.RawData, caSpki, signer, caCertificateDer,
-            CaStateFile.Load(settings.State), TimeSpan.FromHours(settings.ValidityHours));
+            (CaStateStores.IsToken(settings.State)
+                ? new TokenCaStateStore(session, settings.CaLabel)
+                : (ICaStateStore)new FileCaStateStore(settings.State)).Load(),
+            TimeSpan.FromHours(settings.ValidityHours));
 
         return settings.Listen is { } prefix
             ? Serve(responder, prefix, settings.MaxRequests)

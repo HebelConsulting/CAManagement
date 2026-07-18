@@ -112,6 +112,30 @@ public sealed class ConsoleEndToEndTests
                 Assert.Equal(0, server.ExitCode);
             }
 
+            // --- CA state on the token ------------------------------------------
+            // Fresh store (independent of ca-state.json); revoke and gen-crl run in
+            // separate processes, so the state provably persists on the token.
+            var tokenRevoke = Run(binary, ["revoke", "--serial", leafCertificate.SerialNumber,
+                "--reason", "Superseded", "--state", "token", "--ca-label", "e2e-root"], workDir.FullName, environment);
+            Assert.True(tokenRevoke.ExitCode == 0, $"revoke --state token failed: {tokenRevoke.Output}");
+
+            var tokenGenCrl = Run(binary, ["gen-crl", "--ca-label", "e2e-root", "--ca-cert", "ca.crt",
+                "--state", "token", "--out", "ca-token.crl"], workDir.FullName, environment);
+            Assert.True(tokenGenCrl.ExitCode == 0, $"gen-crl --state token failed: {tokenGenCrl.Output}");
+
+            var tokenCrlDer = ReadPem(workDir.FullName, "ca-token.crl");
+            CertificateRevocationListBuilder.Load(tokenCrlDer, out BigInteger tokenCrlNumber);
+            Assert.Equal(BigInteger.One, tokenCrlNumber); // fresh on-token store, first CRL
+            Assert.True(CrlBuilderTests.CrlSignatureIsValid(tokenCrlDer, caCertificate));
+            Assert.Contains(leafCertificate.SerialNumber, Convert.ToHexString(tokenCrlDer), StringComparison.OrdinalIgnoreCase);
+
+            // Revoking the same serial again reports it as already recorded — the
+            // entry really was read back from the token, not from any file.
+            var tokenRevokeAgain = Run(binary, ["revoke", "--serial", leafCertificate.SerialNumber,
+                "--reason", "Superseded", "--state", "token", "--ca-label", "e2e-root"], workDir.FullName, environment);
+            Assert.True(tokenRevokeAgain.ExitCode == 0, tokenRevokeAgain.Output);
+            Assert.Contains("already revoked", tokenRevokeAgain.Output);
+
             // --- asn -------------------------------------------------------------
             var asn = Run(binary, ["asn", "ca.crt"], workDir.FullName, environment);
             Assert.True(asn.ExitCode == 0, $"asn failed: {asn.Output}");

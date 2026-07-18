@@ -115,6 +115,19 @@ public sealed class Pkcs11Options
   arm64 `libsofthsm2.so`. `caconsole info` needs an initialized token in the
   active `SOFTHSM2_CONF`; the default config reports `CKR_TOKEN_NOT_RECOGNIZED`.
 
+## CA state on token (added 2026-07-18, closes the D5 deferral)
+- `--state token` on revoke/gen-crl/ocsp-respond keeps the CA state (CRL
+  number + revocations, same JSON as the file store) as a CKO_DATA object
+  labelled `ca-state:<ca-label>` — it lives with the CA key and is only
+  reachable after login. revoke gains `--ca-label`/`--pin` for this mode.
+- SoftHSM quirk (verified): in-place `C_SetAttributeValue` on a data object's
+  CKA_VALUE returns CKR_ATTRIBUTE_READ_ONLY, but CKA_LABEL updates work.
+  `TokenCaStateStore` therefore saves via staged rename (create `.new` →
+  destroy old → relabel), and Load self-heals a crash between the last two
+  steps by adopting the staged object.
+- The `C_SetAttributeValue` binding exists in CAManagement.Pkcs11 regardless
+  (label updates are its verified use).
+
 ## Publishing (added 2026-07-17)
 - `scripts/publish.sh` builds self-contained single-file `caconsole` binaries
   for **osx-arm64, osx-x64, linux-x64** into `dist/<rid>/` (binary +

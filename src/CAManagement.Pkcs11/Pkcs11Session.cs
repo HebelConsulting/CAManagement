@@ -188,6 +188,14 @@ public sealed class Pkcs11Session : IDisposable
 
     public void DestroyObject(NativeULong objectHandle) => _library.DestroyObject(Handle, objectHandle);
 
+    /// <summary>Replaces an attribute value in place (<c>C_SetAttributeValue</c>), e.g. a data object's CKA_VALUE.</summary>
+    public void SetAttributeValue(NativeULong objectHandle, CK_ATTRIBUTE_TYPE type, byte[] value)
+    {
+        using var scope = new NativeAllocationScope();
+
+        _library.SetAttributeValue(Handle, objectHandle, [scope.Attribute(type, value)]);
+    }
+
     /// <summary>Signs <paramref name="data"/> with the given private key handle.</summary>
     public byte[] Sign(CK_MECHANISM_TYPE mechanismType, byte[] data, NativeULong privateKeyHandle)
     {

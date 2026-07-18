@@ -64,6 +64,35 @@ public sealed class ObjectManagementTests(SoftHsmFixture fixture)
     }
 
     [Fact]
+    public void Data_object_labels_update_in_place_but_values_are_read_only()
+    {
+        using var library = new Pkcs11Library(fixture.CreateOptions());
+        using var session = library.OpenSession();
+        using var _ = session.Login(SoftHsmFixture.UserPin);
+
+        var label = $"setattr-{Guid.NewGuid():N}";
+        var handle = session.CreateDataObject(label, "initial"u8.ToArray());
+        try
+        {
+            // SoftHSM allows relabelling…
+            var newLabel = $"relabelled-{Guid.NewGuid():N}";
+            session.SetAttributeValue(handle, CK_ATTRIBUTE_TYPE.CKA_LABEL, System.Text.Encoding.UTF8.GetBytes(newLabel));
+            Assert.Equal(newLabel, System.Text.Encoding.UTF8.GetString(
+                session.GetAttributeValue(handle, CK_ATTRIBUTE_TYPE.CKA_LABEL)));
+
+            // …but refuses in-place CKA_VALUE updates — the reason TokenCaStateStore
+            // uses a staged-rename protocol instead.
+            var exception = Assert.Throws<Pkcs11Exception>(() =>
+                session.SetAttributeValue(handle, CK_ATTRIBUTE_TYPE.CKA_VALUE, "replacement"u8.ToArray()));
+            Assert.Equal(CK_RV.CKR_ATTRIBUTE_READ_ONLY, exception.ReturnValue);
+        }
+        finally
+        {
+            session.DestroyObject(handle);
+        }
+    }
+
+    [Fact]
     public void Destroying_an_invalid_handle_throws_pkcs11_exception()
     {
         using var library = new Pkcs11Library(fixture.CreateOptions());

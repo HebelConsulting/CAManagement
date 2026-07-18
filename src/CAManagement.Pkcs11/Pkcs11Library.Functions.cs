@@ -63,6 +63,9 @@ public sealed partial class Pkcs11Library
     private delegate CK_RV CkGetAttributeValueDelegate(NativeULong session, NativeULong objectHandle, [In, Out] CK_ATTRIBUTE[] template, NativeULong count);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate CK_RV CkSetAttributeValueDelegate(NativeULong session, NativeULong objectHandle, [In] CK_ATTRIBUTE[] template, NativeULong count);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate CK_RV CkFindObjectsInitDelegate(NativeULong session, [In] CK_ATTRIBUTE[] template, NativeULong count);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -94,6 +97,7 @@ public sealed partial class Pkcs11Library
     private CkDestroyObjectDelegate _cDestroyObject = null!;
     private CkGenerateKeyPairDelegate _cGenerateKeyPair = null!;
     private CkGetAttributeValueDelegate _cGetAttributeValue = null!;
+    private CkSetAttributeValueDelegate _cSetAttributeValue = null!;
     private CkFindObjectsInitDelegate _cFindObjectsInit = null!;
     private CkFindObjectsDelegate _cFindObjects = null!;
     private CkSessionHandleDelegate _cFindObjectsFinal = null!;
@@ -121,6 +125,7 @@ public sealed partial class Pkcs11Library
         _cDestroyObject = Bind<CkDestroyObjectDelegate>(_functions.C_DestroyObject, nameof(_functions.C_DestroyObject));
         _cGenerateKeyPair = Bind<CkGenerateKeyPairDelegate>(_functions.C_GenerateKeyPair, nameof(_functions.C_GenerateKeyPair));
         _cGetAttributeValue = Bind<CkGetAttributeValueDelegate>(_functions.C_GetAttributeValue, nameof(_functions.C_GetAttributeValue));
+        _cSetAttributeValue = Bind<CkSetAttributeValueDelegate>(_functions.C_SetAttributeValue, nameof(_functions.C_SetAttributeValue));
         _cFindObjectsInit = Bind<CkFindObjectsInitDelegate>(_functions.C_FindObjectsInit, nameof(_functions.C_FindObjectsInit));
         _cFindObjects = Bind<CkFindObjectsDelegate>(_functions.C_FindObjects, nameof(_functions.C_FindObjects));
         _cFindObjectsFinal = Bind<CkSessionHandleDelegate>(_functions.C_FindObjectsFinal, nameof(_functions.C_FindObjectsFinal));
@@ -216,6 +221,9 @@ public sealed partial class Pkcs11Library
 
         return (publicKey, privateKey);
     }
+
+    internal void SetAttributeValue(NativeULong session, NativeULong objectHandle, CK_ATTRIBUTE[] template) =>
+        CheckRv(_cSetAttributeValue(session, objectHandle, template, (NativeULong)template.Length), "C_SetAttributeValue");
 
     internal byte[] GetAttributeValue(NativeULong session, NativeULong objectHandle, CK_ATTRIBUTE_TYPE type)
     {

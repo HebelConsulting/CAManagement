@@ -6,8 +6,8 @@ using Spectre.Console.Cli;
 
 namespace CAManagement.Cli.Commands;
 
-/// <summary>Records a revocation in the CA state file (published with gen-crl).</summary>
-public sealed class RevokeCommand : Command<RevokeCommand.Settings>
+/// <summary>Records a revocation in the CA state (published with gen-crl).</summary>
+public sealed class RevokeCommand(HsmCa hsm) : Command<RevokeCommand.Settings>
 {
     public sealed class Settings : CommandSettings
     {
@@ -19,17 +19,35 @@ public sealed class RevokeCommand : Command<RevokeCommand.Settings>
         [DefaultValue(RevocationReason.Unspecified)]
         public RevocationReason Reason { get; init; } = RevocationReason.Unspecified;
 
-        [CommandOption("--state <FILE>")]
+        [CommandOption("--state <FILE|token>")]
+        [Description("CA state file path, or 'token' to keep state as a data object on the HSM token.")]
         [DefaultValue("ca-state.json")]
         public string State { get; init; } = "ca-state.json";
+
+        [CommandOption("--ca-label <LABEL>")]
+        [Description("Token label of the CA key pair (required with --state token).")]
+        public string? CaLabel { get; init; }
+
+        [CommandOption("--pin <PIN>")]
+        public string? Pin { get; init; }
+
+        public override ValidationResult Validate() =>
+            CaStateStores.IsToken(State) && CaLabel is null
+                ? ValidationResult.Error("--state token requires --ca-label.")
+                : ValidationResult.Success();
     }
 
     protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
+        using var hsmScope = hsm;
+        ICaStateStore store = CaStateStores.IsToken(settings.State)
+            ? new TokenCaStateStore(hsm.OpenLoggedInSession(settings.Pin), settings.CaLabel!)
+            : new FileCaStateStore(settings.State);
+
         var serial = Convert.FromHexString(settings.Serial.Length % 2 == 0 ? settings.Serial : $"0{settings.Serial}");
         var serialHex = Convert.ToHexString(serial);
 
-        var state = CaStateFile.Load(settings.State);
+        var state = store.Load();
 
         if (state.Revoked.Any(r => r.SerialHex == serialHex))
         {
@@ -38,7 +56,7 @@ public sealed class RevokeCommand : Command<RevokeCommand.Settings>
         }
 
         state.Revoked.Add(new CaStateFile.RevokedEntry(serialHex, DateTimeOffset.UtcNow, settings.Reason));
-        state.Save(settings.State);
+        store.Save(state);
 
         AnsiConsole.MarkupLine($"[green]Revoked[/] serial [yellow]{serialHex}[/] ({settings.Reason}); " +
             $"run [blue]gen-crl[/] to publish.");
