@@ -9,7 +9,7 @@ namespace CAManagement.Cli.Commands;
 /// <summary>Generates a CA key pair on the token and writes a self-signed root certificate.</summary>
 public sealed class InitCaCommand : Command<InitCaCommand.Settings>
 {
-    public sealed class Settings : HsmSettings
+    public sealed class Settings : HsmLoginSettings
     {
         [CommandOption("--label <LABEL>")]
         [Description("Token label for the CA key pair.")]
@@ -38,7 +38,7 @@ public sealed class InitCaCommand : Command<InitCaCommand.Settings>
     protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         using var hsm = new HsmCa();
-        var session = hsm.OpenLoggedInSession(settings);
+        var session = hsm.OpenLoggedInSession(settings, settings.Pin);
 
         if (session.FindObjects(CAManagement.Pkcs11.DataStructures.CK_OBJECT_CLASS.CKO_PRIVATE_KEY, settings.Label).Count > 0)
         {

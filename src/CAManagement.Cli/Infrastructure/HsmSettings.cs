@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using CAManagement.Pkcs11.Configuration;
+using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace CAManagement.Cli.Infrastructure;
@@ -24,17 +25,12 @@ public class HsmSettings : CommandSettings
     [Description("Explicit slot id (overrides --token-label).")]
     public ulong? Slot { get; init; }
 
-    [CommandOption("--pin <PIN>")]
-    [Description("User PIN. Default: prompt interactively.")]
-    public string? Pin { get; init; }
-
     internal Pkcs11Options ToPkcs11Options()
     {
         var options = new Pkcs11Options
         {
             TokenLabel = TokenLabel,
             SlotId = Slot,
-            UserPin = Pin,
         };
 
         if (Module is { } module)
@@ -44,4 +40,18 @@ public class HsmSettings : CommandSettings
 
         return options;
     }
+}
+
+/// <summary>Settings for commands that log in to the token — the PIN is mandatory.</summary>
+public class HsmLoginSettings : HsmSettings
+{
+    [CommandOption("--pin <PIN>")]
+    [Description("User PIN (required).")]
+    public required string Pin { get; init; }
+
+    // Spectre constructs settings via reflection and does not enforce the C#
+    // `required` modifier — validate explicitly.
+    public override ValidationResult Validate() => string.IsNullOrEmpty(Pin)
+        ? ValidationResult.Error("Missing required option --pin.")
+        : base.Validate();
 }

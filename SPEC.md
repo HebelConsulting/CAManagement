@@ -119,8 +119,12 @@ public sealed class Pkcs11Options
 The CLI no longer reads `appsettings.json` or environment variables; all HSM
 parameters are CLI options with educated defaults (`HsmSettings`): `--module`
 (default: the platform's SoftHSM2 location), `--token-label` (default: first
-slot with a token present), `--slot` (overrides the label), `--pin` (default:
-interactive secret prompt). Decision #5 (`IOptions<Pkcs11Options>` binding)
+slot with a token present), `--slot` (overrides the label). `--pin` is
+**mandatory** on login commands (`HsmLoginSettings`; no interactive prompt);
+`info` needs no PIN and `revoke` requires one only with `--state token`.
+Note: Spectre constructs settings via reflection and does not enforce the C#
+`required` modifier — the mandatory PIN is enforced by explicit validation.
+Decision #5 (`IOptions<Pkcs11Options>` binding)
 still holds for the *library* — hosts that want config files keep `AddPkcs11`.
 
 ## NuGet packaging (added 2026-07-18)

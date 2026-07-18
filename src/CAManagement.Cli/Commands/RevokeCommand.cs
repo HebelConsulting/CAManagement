@@ -28,10 +28,14 @@ public sealed class RevokeCommand : Command<RevokeCommand.Settings>
         [Description("Token label of the CA key pair (required with --state token).")]
         public string? CaLabel { get; init; }
 
+        [CommandOption("--pin <PIN>")]
+        [Description("User PIN (required with --state token).")]
+        public string? Pin { get; init; }
+
 
         public override ValidationResult Validate() =>
-            CaStateStores.IsToken(State) && CaLabel is null
-                ? ValidationResult.Error("--state token requires --ca-label.")
+            CaStateStores.IsToken(State) && (CaLabel is null || Pin is null)
+                ? ValidationResult.Error("--state token requires --ca-label and --pin.")
                 : ValidationResult.Success();
     }
 
@@ -39,7 +43,7 @@ public sealed class RevokeCommand : Command<RevokeCommand.Settings>
     {
         using var hsm = new HsmCa();
         ICaStateStore store = CaStateStores.IsToken(settings.State)
-            ? new TokenCaStateStore(hsm.OpenLoggedInSession(settings), settings.CaLabel!)
+            ? new TokenCaStateStore(hsm.OpenLoggedInSession(settings, settings.Pin!), settings.CaLabel!)
             : new FileCaStateStore(settings.State);
 
         var serial = Convert.FromHexString(settings.Serial.Length % 2 == 0 ? settings.Serial : $"0{settings.Serial}");

@@ -16,7 +16,7 @@ namespace CAManagement.Cli.Commands;
 /// </summary>
 public sealed class OcspRespondCommand : Command<OcspRespondCommand.Settings>
 {
-    public sealed class Settings : HsmSettings
+    public sealed class Settings : HsmLoginSettings
     {
         [CommandOption("--ca-label <LABEL>")]
         [Description("Token label of the CA key pair.")]
@@ -56,6 +56,11 @@ public sealed class OcspRespondCommand : Command<OcspRespondCommand.Settings>
 
         public override ValidationResult Validate()
         {
+            if (base.Validate() is { Successful: false } baseResult)
+            {
+                return baseResult; // mandatory --pin from HsmLoginSettings
+            }
+
             var fileMode = ReqIn is not null || RespOut is not null;
 
             return (fileMode, Listen) switch
@@ -72,7 +77,7 @@ public sealed class OcspRespondCommand : Command<OcspRespondCommand.Settings>
     protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         using var hsm = new HsmCa();
-        var session = hsm.OpenLoggedInSession(settings);
+        var session = hsm.OpenLoggedInSession(settings, settings.Pin);
         var (signer, caSpki) = hsm.LoadCaKey(session, settings.CaLabel);
 
         var caCertificateDer = IssueCommand.ReadDer(settings.CaCert);

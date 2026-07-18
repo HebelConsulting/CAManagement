@@ -10,7 +10,7 @@ namespace CAManagement.Cli.Commands;
 /// <summary>Issues a certificate from a PKCS#10 CSR, signed by the token-resident CA key.</summary>
 public sealed class IssueCommand : Command<IssueCommand.Settings>
 {
-    public sealed class Settings : HsmSettings
+    public sealed class Settings : HsmLoginSettings
     {
         [CommandOption("--ca-label <LABEL>")]
         [Description("Token label of the CA key pair.")]
@@ -37,7 +37,7 @@ public sealed class IssueCommand : Command<IssueCommand.Settings>
     protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         using var hsm = new HsmCa();
-        var session = hsm.OpenLoggedInSession(settings);
+        var session = hsm.OpenLoggedInSession(settings, settings.Pin);
         var (signer, caSpki) = hsm.LoadCaKey(session, settings.CaLabel);
 
         var issuer = X509Names.SubjectOf(File.ReadAllBytes(settings.CaCert));

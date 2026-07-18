@@ -10,7 +10,7 @@ namespace CAManagement.Cli.Commands;
 /// <summary>Signs a CRL from the CA state file with the token-resident CA key.</summary>
 public sealed class GenCrlCommand : Command<GenCrlCommand.Settings>
 {
-    public sealed class Settings : HsmSettings
+    public sealed class Settings : HsmLoginSettings
     {
         [CommandOption("--ca-label <LABEL>")]
         [Description("Token label of the CA key pair.")]
@@ -39,7 +39,7 @@ public sealed class GenCrlCommand : Command<GenCrlCommand.Settings>
     protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         using var hsm = new HsmCa();
-        var session = hsm.OpenLoggedInSession(settings);
+        var session = hsm.OpenLoggedInSession(settings, settings.Pin);
         var (signer, caSpki) = hsm.LoadCaKey(session, settings.CaLabel);
 
         // The CRL issuer is the CA certificate's subject (byte-faithful extraction).

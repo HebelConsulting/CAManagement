@@ -2,7 +2,6 @@ using CAManagement.X509;
 using CAManagement.Pkcs11;
 using CAManagement.Pkcs11.DataStructures;
 using CAManagement.Pkcs11.Signing;
-using Spectre.Console;
 
 namespace CAManagement.Cli.Infrastructure;
 
@@ -16,13 +15,10 @@ public sealed class HsmCa : IDisposable
     private Pkcs11Session? _session;
     private LoginScope? _login;
 
-    public Pkcs11Session OpenLoggedInSession(HsmSettings settings)
+    public Pkcs11Session OpenLoggedInSession(HsmSettings settings, string pin)
     {
         _library = new Pkcs11Library(settings.ToPkcs11Options());
         _session = _library.OpenSession();
-
-        var pin = settings.Pin
-            ?? AnsiConsole.Prompt(new TextPrompt<string>("User PIN:").Secret());
         _login = _session.Login(pin);
 
         return _session;
