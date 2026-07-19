@@ -48,6 +48,8 @@ public sealed class Pkcs11IntegrationTests(SoftHsmFixture fixture)
     [Fact]
     public void Generates_ec_keypair_and_round_trips_an_ecdsa_signature()
     {
+        if (!fixture.SupportsEcdsaSha256()) { return; } // SoftHSM 2.5.0 lacks CKM_ECDSA_SHA256
+
         using var library = new Pkcs11Library(fixture.CreateOptions());
         using var session = library.OpenSession();
         using var _ = session.Login(SoftHsmFixture.UserPin);

@@ -13,6 +13,8 @@ public sealed class CrlIssuanceTests(SoftHsmFixture fixture)
     [Fact]
     public void Hsm_backed_ca_signs_a_crl_that_verifies()
     {
+        if (!fixture.SupportsEcdsaSha256()) { return; } // EC CA; SoftHSM 2.5.0 lacks CKM_ECDSA_SHA256
+
         using var library = new Pkcs11Library(fixture.CreateOptions());
         using var session = library.OpenSession();
         using var _ = session.Login(SoftHsmFixture.UserPin);

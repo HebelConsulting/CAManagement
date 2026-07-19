@@ -18,6 +18,8 @@ public sealed class CertificateIssuanceTests(SoftHsmFixture fixture)
     [InlineData(false)] // RSA-2048 CA key in the HSM
     public void Hsm_backed_ca_issues_a_chain_valid_certificate(bool useEcdsaCa)
     {
+        if (useEcdsaCa && !fixture.SupportsEcdsaSha256()) { return; } // SoftHSM 2.5.0 lacks CKM_ECDSA_SHA256
+
         using var library = new Pkcs11Library(fixture.CreateOptions());
         using var session = library.OpenSession();
         using var _ = session.Login(SoftHsmFixture.UserPin);
@@ -77,6 +79,8 @@ public sealed class CertificateIssuanceTests(SoftHsmFixture fixture)
     [Fact]
     public void Hsm_backed_ca_issues_from_a_pkcs10_request()
     {
+        if (!fixture.SupportsEcdsaSha256()) { return; } // EC CA; SoftHSM 2.5.0 lacks CKM_ECDSA_SHA256
+
         using var library = new Pkcs11Library(fixture.CreateOptions());
         using var session = library.OpenSession();
         using var _ = session.Login(SoftHsmFixture.UserPin);

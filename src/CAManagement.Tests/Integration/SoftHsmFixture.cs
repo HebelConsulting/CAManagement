@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using CAManagement.Pkcs11;
 using CAManagement.Pkcs11.Configuration;
+using CAManagement.Pkcs11.DataStructures;
 
 namespace CAManagement.Tests.Integration;
 
@@ -80,6 +82,27 @@ public sealed class SoftHsmFixture : IDisposable
         return options;
     }
 
+    /// <summary>
+    /// Whether the token supports ECDSA-with-hash signing. SoftHSM 2.5.0 (the
+    /// Disig Windows build) implements CKM_ECDSA but not CKM_ECDSA_SHA256, so
+    /// EC-signing tests self-skip there — the ABI is proven by EC keygen (same
+    /// CK_MECHANISM marshalling) plus the RSA signing round trips.
+    /// </summary>
+    public bool SupportsEcdsaSha256()
+    {
+        using var library = new Pkcs11Library(CreateOptions());
+        using var session = library.OpenSession();
+        try
+        {
+            library.GetMechanismInfo(session.Slot, CK_MECHANISM_TYPE.CKM_ECDSA_SHA256);
+            return true;
+        }
+        catch (Pkcs11Exception)
+        {
+            return false;
+        }
+    }
+
     private static void RunSoftHsmUtil(string arguments, string configPath)
     {
         var startInfo = new ProcessStartInfo(SoftHsmUtilPath, arguments)
@@ -89,6 +112,14 @@ public sealed class SoftHsmFixture : IDisposable
             UseShellExecute = false,
         };
         startInfo.Environment["SOFTHSM2_CONF"] = configPath;
+
+        // The portable Windows softhsm2-util.exe loads its sibling DLLs from PATH.
+        if (WindowsModulePath is { } modulePath)
+        {
+            var softHsmRoot = Path.GetDirectoryName(Path.GetDirectoryName(modulePath))!;
+            startInfo.Environment["PATH"] =
+                $@"{softHsmRoot}\bin;{softHsmRoot}\lib;{Environment.GetEnvironmentVariable("PATH")}";
+        }
 
         using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException("Could not start 'softhsm2-util'. Is SoftHSM2 installed?");
