@@ -17,13 +17,16 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Install SoftHSM2 (Disig build for Windows)
+      - name: Install SoftHSM2 (Disig portable build for Windows)
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri 'https://github.com/disig/SoftHSM2-for-Windows/releases/download/v2.5.0/SoftHSM2-2.5.0.msi' -OutFile softhsm2.msi
-          Start-Process msiexec.exe -ArgumentList '/i','softhsm2.msi','/qn' -Wait
-          if (-not (Test-Path 'C:\SoftHSM2\lib\softhsm2-x64.dll')) { throw 'SoftHSM2 module not found after install' }
-          Get-ChildItem 'C:\SoftHSM2' -Recurse -Depth 1 | Select-Object FullName
+          Invoke-WebRequest -Uri 'https://github.com/disig/SoftHSM2-for-Windows/releases/download/v2.5.0/SoftHSM2-2.5.0-portable.zip' -OutFile softhsm2.zip
+          Expand-Archive softhsm2.zip -DestinationPath C:\softhsm2-extract
+          Get-ChildItem 'C:\softhsm2-extract' -Recurse -Depth 2 | Select-Object FullName
+          # Normalize to the layout the tests probe: C:\SoftHSM2\{bin,lib}
+          $root = Get-ChildItem 'C:\softhsm2-extract' -Directory | Select-Object -First 1
+          Move-Item $root.FullName 'C:\SoftHSM2'
+          if (-not (Test-Path 'C:\SoftHSM2\lib\softhsm2-x64.dll')) { throw 'SoftHSM2 module not found after extract' }
 
       - name: Test (net10.0-windows, LLP64)
         run: dotnet test CAManagement.sln --nologo -v n
