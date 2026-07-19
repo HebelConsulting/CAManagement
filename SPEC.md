@@ -130,9 +130,21 @@ public sealed class Pkcs11Options
 - **Consumer caveat**: a Windows app must target `net10.0-windows` to get the
   LLP64 asset — a plain `net10.0` app on Windows would silently pick the LP64
   assembly and corrupt every CK_ULONG.
-- **Remaining (needs a Windows machine)**: runtime verification against
-  SoftHSM2's Windows build — struct sizes, the full test suite, and the CLI
-  lifecycle. Everything up to that point is compile-time-proven only.
+- **Runtime-verified on real Windows** (2026-07-19): the `.github/workflows/
+  windows-verify.yml` job (manual `workflow_dispatch`) runs the full suite on
+  `windows-latest` against the Disig SoftHSM2 portable build, using the
+  net10.0-windows (LLP64) assemblies — **157/157 passed** (GH Actions run
+  29679052250). This exercises the LLP64 struct sizes (StructLayoutTests
+  Windows table), RSA generate/sign/verify interop, object management, CA
+  issuance/CRL/OCSP and the console lifecycle end to end.
+- Two Windows-specific findings from that run, both handled: (1) the portable
+  `softhsm2-util.exe` needs its sibling DLLs on `PATH`; the test harness sets
+  it. (2) SoftHSM **2.5.0** (newest Disig Windows build) implements
+  `CKM_ECDSA` but not `CKM_ECDSA_SHA256` — EC keygen succeeds (proving the
+  `CK_MECHANISM` marshalling) while EC-with-hash signing returns
+  `CKR_MECHANISM_INVALID`. EC-signing HSM tests self-skip there via
+  `SoftHsmFixture.SupportsEcdsaSha256()`; the E2E CA uses RSA on Windows / EC
+  on macOS. This is a token feature gap, not an ABI issue.
 
 ## CLI configuration (changed 2026-07-18)
 The CLI no longer reads `appsettings.json` or environment variables; all HSM
