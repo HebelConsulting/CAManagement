@@ -33,9 +33,18 @@ public sealed class SoftHsmFixture : IDisposable
 
         // SoftHSM reads SOFTHSM2_CONF via native getenv() at C_Initialize. On macOS
         // Environment.SetEnvironmentVariable does NOT reach native getenv, so set it
-        // through libc setenv as well; do this before any module load.
+        // through libc setenv as well; do this before any module load. On Windows the
+        // managed call updates the Win32 environment, which the module's CRT snapshots
+        // when the DLL loads; _putenv_s is added as belt and braces.
         Environment.SetEnvironmentVariable("SOFTHSM2_CONF", configPath);
-        setenv("SOFTHSM2_CONF", configPath, overwrite: 1);
+        if (OperatingSystem.IsWindows())
+        {
+            _putenv_s("SOFTHSM2_CONF", configPath);
+        }
+        else
+        {
+            setenv("SOFTHSM2_CONF", configPath, overwrite: 1);
+        }
 
         RunSoftHsmUtil($"--init-token --free --label {TokenLabel} --so-pin {SoPin} --pin {UserPin}", configPath);
     }
@@ -43,15 +52,37 @@ public sealed class SoftHsmFixture : IDisposable
     [DllImport("libc", SetLastError = true)]
     private static extern int setenv(string name, string value, int overwrite);
 
-    public Pkcs11Options CreateOptions() => new()
+    [DllImport("ucrtbase", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int _putenv_s(string name, string value);
+
+    /// <summary>Windows install locations of the Disig SoftHSM2 MSI.</summary>
+    internal static string SoftHsmUtilPath => OperatingSystem.IsWindows()
+        ? @"C:\SoftHSM2\bin\softhsm2-util.exe"
+        : "softhsm2-util";
+
+    internal static string? WindowsModulePath => OperatingSystem.IsWindows()
+        ? @"C:\SoftHSM2\lib\softhsm2-x64.dll"
+        : null;
+
+    public Pkcs11Options CreateOptions()
     {
-        TokenLabel = TokenLabel,
-        UserPin = UserPin,
-    };
+        var options = new Pkcs11Options
+        {
+            TokenLabel = TokenLabel,
+            UserPin = UserPin,
+        };
+
+        if (WindowsModulePath is { } modulePath)
+        {
+            options.ModulePath = modulePath;
+        }
+
+        return options;
+    }
 
     private static void RunSoftHsmUtil(string arguments, string configPath)
     {
-        var startInfo = new ProcessStartInfo("softhsm2-util", arguments)
+        var startInfo = new ProcessStartInfo(SoftHsmUtilPath, arguments)
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,

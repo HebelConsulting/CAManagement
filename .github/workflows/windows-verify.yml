@@ -1,0 +1,29 @@
+name: windows-verify
+
+# Manual trigger only: verifies the LLP64 (net10.0-windows) build against a
+# real SoftHSM2 on a genuine Windows machine. Windows runner minutes bill at
+# 2x on private repos, so this does not run on every push.
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install SoftHSM2 (Disig build for Windows)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri 'https://github.com/disig/SoftHSM2-for-Windows/releases/download/v2.5.0/SoftHSM2-2.5.0.msi' -OutFile softhsm2.msi
+          Start-Process msiexec.exe -ArgumentList '/i','softhsm2.msi','/qn' -Wait
+          if (-not (Test-Path 'C:\SoftHSM2\lib\softhsm2-x64.dll')) { throw 'SoftHSM2 module not found after install' }
+          Get-ChildItem 'C:\SoftHSM2' -Recurse -Depth 1 | Select-Object FullName
+
+      - name: Test (net10.0-windows, LLP64)
+        run: dotnet test CAManagement.sln --nologo -v n

@@ -169,14 +169,17 @@ public sealed class ConsoleEndToEndTests
     {
         // Locate the project by search so repository layout changes don't break us.
         var csproj = Directory.GetFiles(repoRoot, "CAManagement.Cli.csproj", SearchOption.AllDirectories).Single();
+        var framework = OperatingSystem.IsWindows() ? "net10.0-windows" : "net10.0";
 
         // --disable-build-servers: avoid contending for the MSBuild/Roslyn build
         // servers of the outer `dotnet test` session that is running this test.
-        var build = Run("dotnet", ["build", csproj,
+        var build = Run("dotnet", ["build", csproj, "-f", framework,
             "-c", "Debug", "--nologo", "-v", "q", "--disable-build-servers"], repoRoot, []);
         Assert.True(build.ExitCode == 0, $"console build failed: {build.Output}");
 
-        var binary = Path.Combine(Path.GetDirectoryName(csproj)!, "bin", "Debug", "net10.0", "osx-arm64", "caconsole");
+        var binary = OperatingSystem.IsWindows()
+            ? Path.Combine(Path.GetDirectoryName(csproj)!, "bin", "Debug", framework, "caconsole.exe")
+            : Path.Combine(Path.GetDirectoryName(csproj)!, "bin", "Debug", framework, "osx-arm64", "caconsole");
         Assert.True(File.Exists(binary), $"console binary not found at {binary}");
 
         return binary;
@@ -199,7 +202,13 @@ public sealed class ConsoleEndToEndTests
             ["NO_COLOR"] = "1",
         };
 
-        var init = Run("softhsm2-util", ["--init-token", "--free", "--label", "e2e-token",
+        if (SoftHsmFixture.WindowsModulePath is { } moduleDir)
+        {
+            // Let the CLI's bare default module name resolve via PATH.
+            environment["PATH"] = $"{Path.GetDirectoryName(moduleDir)};{Environment.GetEnvironmentVariable("PATH")}";
+        }
+
+        var init = Run(SoftHsmFixture.SoftHsmUtilPath, ["--init-token", "--free", "--label", "e2e-token",
             "--so-pin", "12345678", "--pin", UserPin], workDir, environment);
         Assert.True(init.ExitCode == 0, $"token init failed: {init.Output}");
 

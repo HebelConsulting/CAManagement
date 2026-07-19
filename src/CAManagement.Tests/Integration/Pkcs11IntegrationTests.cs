@@ -26,7 +26,7 @@ public sealed class Pkcs11IntegrationTests(SoftHsmFixture fixture)
 
         using var session = library.OpenSession();
 
-        Assert.NotEqual(0UL, session.Handle);
+        Assert.NotEqual((NativeULong)0, session.Handle);
     }
 
     [Fact]
