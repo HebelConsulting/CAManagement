@@ -29,12 +29,13 @@ public sealed class ConsoleEndToEndTests
             var environment = ProvisionToken(workDir.FullName);
 
             // --- init-ca ---------------------------------------------------------
-            // The Disig SoftHSM2 Windows build is 2.5.0 and lacks CKM_ECDSA_SHA256,
-            // so the CA key is RSA there (still exercises the whole lifecycle and
-            // the LLP64 ABI); macOS keeps EC coverage.
-            var caKeyType = OperatingSystem.IsWindows() ? "rsa" : "ec";
+            // RSA CA key: CKM_SHA256_RSA_PKCS is implemented by every SoftHSM build,
+            // whereas CKM_ECDSA_SHA256 is not (absent in the Ubuntu 2.6.1 and Disig
+            // Windows 2.5.0 packages, present in Homebrew 2.7.0). This still drives
+            // the whole console lifecycle and the LLP64 ABI; EC HSM signing is
+            // covered by the integration tests where the build supports it.
             var initCa = Run(binary, ["init-ca", "--token-label", "e2e-token", "--pin", UserPin, "--label", "e2e-root",
-                "--key-type", caKeyType,
+                "--key-type", "rsa",
                 "--subject", "C=CH, O=Hebel Consulting, CN=E2E Root CA", "--out", "ca.crt"], workDir.FullName, environment);
             Assert.True(initCa.ExitCode == 0, $"init-ca failed: {initCa.Output}");
 
