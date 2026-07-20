@@ -1,0 +1,56 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: build & test (linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install SoftHSM2
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y softhsm2
+          # Integration tests use the Linux default module path; symlink to it
+          # if the package installed the module elsewhere.
+          module="$(find /usr -name 'libsofthsm2.so' 2>/dev/null | head -1)"
+          echo "SoftHSM module: $module"
+          test -n "$module" || { echo 'libsofthsm2.so not found after install'; exit 1; }
+          sudo mkdir -p /usr/lib/softhsm
+          [ -e /usr/lib/softhsm/libsofthsm2.so ] || sudo ln -s "$module" /usr/lib/softhsm/libsofthsm2.so
+          ls -l /usr/lib/softhsm/libsofthsm2.so
+          softhsm2-util --version
+
+      - name: Restore
+        run: dotnet restore CAManagement.sln
+
+      - name: Build
+        run: dotnet build CAManagement.sln -c Release --no-restore --nologo
+
+      - name: Test
+        run: dotnet test CAManagement.sln -c Release --no-build --nologo -v n
+
+      - name: Pack (validate NuGet packaging)
+        run: dotnet pack CAManagement.sln -c Release -o dist/nuget --no-build --nologo
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: nupkg
+          path: dist/nuget/*.nupkg
+          if-no-files-found: error

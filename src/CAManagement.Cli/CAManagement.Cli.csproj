@@ -5,9 +5,11 @@
         <TargetFrameworks>net10.0;net10.0-windows</TargetFrameworks>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <PublishSingleFile>true</PublishSingleFile>
+        <!-- Publish RID is supplied explicitly (scripts/publish.sh, E2E test); a
+             plain build stays framework-dependent and host-agnostic. Self-contained
+             single-file only kicks in once a RID is passed. -->
+        <PublishSingleFile Condition="'$(RuntimeIdentifier)' != ''">true</PublishSingleFile>
         <SelfContained Condition="'$(RuntimeIdentifier)' != ''">true</SelfContained>
-        <RuntimeIdentifier Condition="'$(TargetFramework)' == 'net10.0'">osx-arm64</RuntimeIdentifier>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <Company>Hebel Consulting GmbH</Company>
         <AssemblyName>caconsole</AssemblyName>

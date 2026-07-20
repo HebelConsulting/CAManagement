@@ -175,19 +175,33 @@ public sealed class ConsoleEndToEndTests
         // Locate the project by search so repository layout changes don't break us.
         var csproj = Directory.GetFiles(repoRoot, "CAManagement.Cli.csproj", SearchOption.AllDirectories).Single();
         var framework = OperatingSystem.IsWindows() ? "net10.0-windows" : "net10.0";
+        var rid = HostRuntimeIdentifier();
 
-        // --disable-build-servers: avoid contending for the MSBuild/Roslyn build
-        // servers of the outer `dotnet test` session that is running this test.
-        var build = Run("dotnet", ["build", csproj, "-f", framework,
+        // Build for the host RID so this runs on any OS/arch (the csproj pins
+        // osx-arm64 for local dev; -r overrides it). --disable-build-servers:
+        // avoid contending with the outer `dotnet test` session's build servers.
+        var build = Run("dotnet", ["build", csproj, "-f", framework, "-r", rid,
             "-c", "Debug", "--nologo", "-v", "q", "--disable-build-servers"], repoRoot, []);
         Assert.True(build.ExitCode == 0, $"console build failed: {build.Output}");
 
-        var binary = OperatingSystem.IsWindows()
-            ? Path.Combine(Path.GetDirectoryName(csproj)!, "bin", "Debug", framework, "caconsole.exe")
-            : Path.Combine(Path.GetDirectoryName(csproj)!, "bin", "Debug", framework, "osx-arm64", "caconsole");
+        var exeName = OperatingSystem.IsWindows() ? "caconsole.exe" : "caconsole";
+        var binary = Path.Combine(Path.GetDirectoryName(csproj)!, "bin", "Debug", framework, rid, exeName);
         Assert.True(File.Exists(binary), $"console binary not found at {binary}");
 
         return binary;
+    }
+
+    private static string HostRuntimeIdentifier()
+    {
+        var os = OperatingSystem.IsWindows() ? "win" : OperatingSystem.IsMacOS() ? "osx" : "linux";
+        var arch = System.Runtime.InteropServices.RuntimeInformation.OSArchitecture switch
+        {
+            System.Runtime.InteropServices.Architecture.Arm64 => "arm64",
+            System.Runtime.InteropServices.Architecture.X64 => "x64",
+            var other => throw new PlatformNotSupportedException($"Unsupported architecture {other}."),
+        };
+
+        return $"{os}-{arch}";
     }
 
     private static Dictionary<string, string> ProvisionToken(string workDir)
