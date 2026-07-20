@@ -139,12 +139,28 @@ public sealed class Pkcs11Options
   issuance/CRL/OCSP and the console lifecycle end to end.
 - Two Windows-specific findings from that run, both handled: (1) the portable
   `softhsm2-util.exe` needs its sibling DLLs on `PATH`; the test harness sets
-  it. (2) SoftHSM **2.5.0** (newest Disig Windows build) implements
-  `CKM_ECDSA` but not `CKM_ECDSA_SHA256` — EC keygen succeeds (proving the
-  `CK_MECHANISM` marshalling) while EC-with-hash signing returns
-  `CKR_MECHANISM_INVALID`. EC-signing HSM tests self-skip there via
-  `SoftHsmFixture.SupportsEcdsaSha256()`; the E2E CA uses RSA on Windows / EC
-  on macOS. This is a token feature gap, not an ABI issue.
+  it. (2) `CKM_ECDSA_SHA256` is not implemented by every SoftHSM build — absent in
+  the Disig Windows 2.5.0 and Ubuntu 2.6.1 packages, present in Homebrew
+  2.7.0. EC keygen still succeeds everywhere (proving the `CK_MECHANISM`
+  marshalling), while EC-with-hash signing returns `CKR_MECHANISM_INVALID`
+  where unimplemented. EC-signing HSM tests self-skip via
+  `SoftHsmFixture.SupportsEcdsaSha256()`; the console E2E uses an RSA CA
+  (`CKM_SHA256_RSA_PKCS`, universal) on all platforms. This is a token
+  feature gap, not an ABI issue.
+
+## Continuous integration (added 2026-07-20)
+- `.github/workflows/ci.yml` runs on every push to `main` and every PR:
+  `ubuntu-latest` installs SoftHSM2 (symlinking the module to the Linux
+  default path), builds Release, runs the full suite (157), packs the three
+  NuGet libraries and uploads them as an artifact. Concurrency cancels
+  superseded runs.
+- `.github/workflows/windows-verify.yml` stays manual (`workflow_dispatch`;
+  Windows minutes bill 2x on private repos) and verifies the LLP64 build.
+- Coverage split: Linux CI on every change (fast, free-ish), Windows on
+  demand, macOS as the local dev loop. All three run the same 157 tests
+  green. Integration tests build the console for the host RID, so the E2E is
+  OS/arch-agnostic; the CLI csproj no longer pins a RID (publish.sh and the
+  E2E pass `-r` explicitly).
 
 ## CLI configuration (changed 2026-07-18)
 The CLI no longer reads `appsettings.json` or environment variables; all HSM
