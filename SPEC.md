@@ -200,6 +200,18 @@ still holds for the *library* — hosts that want config files keep `AddPkcs11`.
   steps by adopting the staged object.
 - The `C_SetAttributeValue` binding exists in CAManagement.Pkcs11 regardless
   (label updates are its verified use).
+- **CRL number monotonicity (RFC 5280 §5.2.3).** The CRL number MUST strictly
+  increase per issuer/scope; this is a *stateful* invariant, so the source of
+  truth is the persisted counter above (`state.CrlNumber++`), which the CLI
+  always passes explicitly. `CrlBuilder.CrlNumber` *defaults* to
+  `(ulong)(UtcNow - UnixEpoch).TotalSeconds` purely as a fallback for callers
+  that supply none — and it is only monotonic under two assumptions: at most
+  one CRL published per second (else two CRLs collide on the same number) and a
+  never-backward clock (an NTP step-back or VM snapshot restore could emit a
+  lower number, which relying parties may treat as stale — a
+  revoked-looks-valid hazard). Callers needing more than one CRL per second, or
+  robustness against clock anomalies, must pass an explicit `CrlNumber` (the CLI
+  does). 64-bit `ulong`, so no 2038/overflow concern.
 
 ## Publishing (added 2026-07-17)
 - `scripts/publish.sh` builds self-contained single-file `caconsole` binaries

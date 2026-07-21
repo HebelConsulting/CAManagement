@@ -262,6 +262,15 @@ minutes are billed at a premium.
   integration tests skip where the mechanism is missing; the CLI end-to-end test
   uses an RSA CA so it runs everywhere. An RSA or EC CA both work against a token
   that implements the mechanism.
+- **CRL numbers need a persisted counter for strict monotonicity.** RFC 5280
+  requires the CRL number to strictly increase per issuer/scope. The CLI keeps
+  a persisted counter (`--state`, file or on-token) and is safe. `CrlBuilder`'s
+  *default* — seconds since the Unix epoch — is a convenience for callers that
+  don't supply one; it is only monotonic while you issue **at most one CRL per
+  second** and the **clock never moves backward** (an NTP step-back or VM
+  snapshot restore could otherwise produce a lower number, which relying parties
+  may treat as stale). For anything beyond one CRL per second, pass an explicit
+  `CrlNumber`.
 - **`asn` decodes; it does not decrypt.** Password-protected containers are
   shown as structure plus KDF parameters, not opened.
 - **`CertificatePolicies`** supports the policy OID with optional CPS-URI and
