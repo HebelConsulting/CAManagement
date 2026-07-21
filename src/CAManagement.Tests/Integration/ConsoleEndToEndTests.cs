@@ -142,6 +142,38 @@ public sealed class ConsoleEndToEndTests
             Assert.True(tokenRevokeAgain.ExitCode == 0, tokenRevokeAgain.Output);
             Assert.Contains("already revoked", tokenRevokeAgain.Output);
 
+            // --- list-slots (C_GetSlotInfo / C_GetTokenInfo / C_GetMechanismList) ---
+            var listSlots = Run(binary, ["list-slots"], workDir.FullName, environment);
+            Assert.True(listSlots.ExitCode == 0, $"list-slots failed: {listSlots.Output}");
+            Assert.Contains("e2e-token", listSlots.Output);
+
+            // --- init-token on the free slot, then set-pin (C_InitToken/InitPIN/SetPIN) ---
+            var initToken = Run(binary, ["init-token", "--free", "--label", "e2e-second",
+                "--so-pin", "12345678", "--pin", "4321"], workDir.FullName, environment);
+            Assert.True(initToken.ExitCode == 0, $"init-token failed: {initToken.Output}");
+
+            var setPin = Run(binary, ["set-pin", "--token-label", "e2e-second", "--pin", "4321", "--new-pin", "8765"],
+                workDir.FullName, environment);
+            Assert.True(setPin.ExitCode == 0, $"set-pin failed: {setPin.Output}");
+
+            // --- multi-part sign / verify with the CA (RSA) key ------------------
+            var sign = Run(binary, ["sign", "--token-label", "e2e-token", "--pin", UserPin,
+                "--key-label", "e2e-root", "--in", "ca.crt", "--out", "ca.sig"], workDir.FullName, environment);
+            Assert.True(sign.ExitCode == 0, $"sign failed: {sign.Output}");
+            Assert.True(File.Exists(Path.Combine(workDir.FullName, "ca.sig")));
+
+            var verify = Run(binary, ["verify", "--token-label", "e2e-token", "--pin", UserPin,
+                "--key-label", "e2e-root", "--in", "ca.crt", "--sig", "ca.sig"], workDir.FullName, environment);
+            Assert.True(verify.ExitCode == 0, $"verify failed: {verify.Output}");
+            Assert.Contains("Signature valid", verify.Output);
+
+            // Verifying against tampered data fails with a nonzero exit.
+            File.WriteAllText(Path.Combine(workDir.FullName, "tampered.txt"), "not the certificate");
+            var verifyBad = Run(binary, ["verify", "--token-label", "e2e-token", "--pin", UserPin,
+                "--key-label", "e2e-root", "--in", "tampered.txt", "--sig", "ca.sig"], workDir.FullName, environment);
+            Assert.NotEqual(0, verifyBad.ExitCode);
+            Assert.Contains("INVALID", verifyBad.Output);
+
             // --- asn -------------------------------------------------------------
             var asn = Run(binary, ["asn", "ca.crt"], workDir.FullName, environment);
             Assert.True(asn.ExitCode == 0, $"asn failed: {asn.Output}");

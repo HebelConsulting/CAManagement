@@ -18,6 +18,16 @@ app.Configure(config =>
 
     config.AddCommand<InfoCommand>("info")
         .WithDescription("Load the PKCS#11 module and show token/session info.");
+    config.AddCommand<ListSlotsCommand>("list-slots")
+        .WithDescription("List slots, tokens and supported mechanisms (like softhsm2-util --show-slots).");
+    config.AddCommand<InitTokenCommand>("init-token")
+        .WithDescription("Initialize a token (SO PIN + label) and set its user PIN.");
+    config.AddCommand<SetPinCommand>("set-pin")
+        .WithDescription("Change the token user PIN.");
+    config.AddCommand<SignCommand>("sign")
+        .WithDescription("Sign a file with a token private key (multi-part).");
+    config.AddCommand<VerifyCommand>("verify")
+        .WithDescription("Verify a file's signature with a token public key (multi-part).");
     config.AddCommand<AsnCommand>("asn")
         .WithDescription("Analyze a certificate, CSR, CRL or key file as an annotated ASN.1 tree.");
     config.AddCommand<InitCaCommand>("init-ca")

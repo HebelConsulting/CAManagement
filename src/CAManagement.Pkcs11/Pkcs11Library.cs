@@ -50,13 +50,32 @@ public sealed partial class Pkcs11Library : IDisposable
     }
 
     /// <summary>Opens a session on the configured slot (SPEC #9).</summary>
-    public Pkcs11Session OpenSession(bool readWrite = true)
-    {
-        var slot = ResolveSlot();
-        var flags = CKF_SERIAL_SESSION | (readWrite ? CKF_RW_SESSION : 0);
-        var handle = OpenSession(slot, (NativeULong)flags);
+    public Pkcs11Session OpenSession(bool readWrite = true) => OpenSession(ResolveSlot(), readWrite);
 
-        return new Pkcs11Session(this, slot, handle);
+    /// <summary>Opens a session on an explicit slot (e.g. a freshly initialized token with no label yet).</summary>
+    public Pkcs11Session OpenSession(NativeULong slotId, bool readWrite = true)
+    {
+        var flags = CKF_SERIAL_SESSION | (readWrite ? CKF_RW_SESSION : 0);
+        var handle = OpenSession(slotId, (NativeULong)flags);
+
+        return new Pkcs11Session(this, slotId, handle);
+    }
+
+    /// <summary>
+    /// The first slot whose token is present but not yet initialized, mirroring
+    /// <c>softhsm2-util --free</c>. Throws if none is available.
+    /// </summary>
+    public NativeULong FindFreeSlot()
+    {
+        foreach (var slot in GetSlotList(tokenPresent: true))
+        {
+            if (!GetTokenInfo(slot).Flags.HasFlag(CK_TOKEN_INFO_FLAGS.CKF_TOKEN_INITIALIZED))
+            {
+                return slot;
+            }
+        }
+
+        throw new InvalidOperationException("No free (uninitialized) token slot is available.");
     }
 
     private NativeULong ResolveSlot()

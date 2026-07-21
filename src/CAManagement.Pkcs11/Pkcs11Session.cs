@@ -218,6 +218,45 @@ public sealed class Pkcs11Session : IDisposable
     public bool Verify(CK_MECHANISM_TYPE mechanismType, byte[] data, byte[] signature) =>
         Verify(mechanismType, data, signature, SingleObject(FindObjects(CKO_PUBLIC_KEY, Mechanisms.KeyTypeFor(mechanismType))));
 
+    /// <summary>
+    /// Signs a stream of parts (<c>C_SignInit</c> / <c>C_SignUpdate…</c> /
+    /// <c>C_SignFinal</c>) — for data too large to hold in one buffer. The
+    /// mechanism must be a multi-part one (a hashing mechanism such as
+    /// <c>CKM_SHA256_RSA_PKCS</c>, not raw <c>CKM_RSA_PKCS</c>).
+    /// </summary>
+    public byte[] SignParts(CK_MECHANISM_TYPE mechanismType, IEnumerable<byte[]> parts, NativeULong privateKeyHandle)
+    {
+        _library.SignInit(Handle, new CK_MECHANISM { Mechanism = mechanismType }, privateKeyHandle);
+
+        foreach (var part in parts)
+        {
+            _library.SignUpdate(Handle, part);
+        }
+
+        return _library.SignFinal(Handle);
+    }
+
+    /// <summary>Verifies a stream of parts (<c>C_VerifyInit</c> / <c>C_VerifyUpdate…</c> / <c>C_VerifyFinal</c>).</summary>
+    public bool VerifyParts(CK_MECHANISM_TYPE mechanismType, IEnumerable<byte[]> parts, byte[] signature, NativeULong publicKeyHandle)
+    {
+        _library.VerifyInit(Handle, new CK_MECHANISM { Mechanism = mechanismType }, publicKeyHandle);
+
+        foreach (var part in parts)
+        {
+            _library.VerifyUpdate(Handle, part);
+        }
+
+        return _library.VerifyFinal(Handle, signature);
+    }
+
+    /// <summary>Sets the user PIN on a token from an SO session (<c>C_InitPIN</c>).</summary>
+    public void InitializeUserPin(string userPin) =>
+        _library.InitPin(Handle, System.Text.Encoding.UTF8.GetBytes(userPin));
+
+    /// <summary>Changes the PIN of the logged-in user, or the user PIN from an R/W public session (<c>C_SetPIN</c>).</summary>
+    public void SetPin(string oldPin, string newPin) =>
+        _library.SetPin(Handle, System.Text.Encoding.UTF8.GetBytes(oldPin), System.Text.Encoding.UTF8.GetBytes(newPin));
+
     private static NativeULong SingleObject(IReadOnlyList<NativeULong> handles) => handles.Count switch
     {
         1 => handles[0],

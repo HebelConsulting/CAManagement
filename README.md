@@ -88,12 +88,32 @@ Every command that touches the HSM shares these options:
 | Command | Does |
 |---------|------|
 | `info` | Load the module, print the Cryptoki version and open a session. |
+| `list-slots` | List slots, tokens and supported-mechanism counts (like `softhsm2-util --show-slots`). |
+| `init-token` | Initialise a token — set the SO PIN, label and user PIN (like `softhsm2-util --init-token`). |
+| `set-pin` | Change the token user PIN. |
 | `asn <file>` | Analyse a certificate, CSR, CRL, key, PKCS#12, CMS or OCSP message as an annotated tree. |
 | `init-ca` | Generate a CA key pair on the token and write a self-signed root. |
 | `issue` | Issue a certificate from a PKCS#10 request, signed by the token key. |
 | `revoke` | Record a revocation in the CA state. |
 | `gen-crl` | Sign a CRL from the CA state. |
 | `ocsp-respond` | Answer OCSP requests (file mode or an HTTP responder). |
+| `sign` / `verify` | Sign or verify a file with a token key, using multi-part signing for data of any size. |
+
+### Token administration (a softhsm2-util stand-in)
+
+`list-slots`, `init-token` and `set-pin` cover softhsm2-util's day-to-day jobs
+through the standard PKCS#11 calls, against **any** module:
+
+```sh
+caconsole list-slots
+caconsole init-token --free --label ca --so-pin 123456 --pin 1234
+caconsole set-pin --token-label ca --pin 1234 --new-pin 5678
+```
+
+(`--free` picks the first uninitialised slot, or use `--slot <id>`.) Key/cert
+*import* is `C_CreateObject` (used by the CA commands); token *deletion* is a
+SoftHSM-specific extension, not a standard PKCS#11 function, so it is out of
+scope here.
 
 ### A complete walk-through
 

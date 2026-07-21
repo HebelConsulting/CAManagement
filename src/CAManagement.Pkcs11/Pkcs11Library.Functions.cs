@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Text;
 using CAManagement.Pkcs11.DataStructures;
 
 namespace CAManagement.Pkcs11;
@@ -80,6 +81,25 @@ public sealed partial class Pkcs11Library
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate CK_RV CkVerifyDelegate(NativeULong session, [In] byte[] data, NativeULong dataLength, [In] byte[] signature, NativeULong signatureLength);
 
+    // Shared by C_SignUpdate, C_VerifyUpdate and C_InitPIN — all (session, bytes, len).
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate CK_RV CkDataPartDelegate(NativeULong session, [In] byte[] data, NativeULong length);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate CK_RV CkSignFinalDelegate(NativeULong session, [Out] byte[]? signature, ref NativeULong signatureLength);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate CK_RV CkVerifyFinalDelegate(NativeULong session, [In] byte[] signature, NativeULong signatureLength);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate CK_RV CkGetMechanismListDelegate(NativeULong slotId, [In, Out] CK_MECHANISM_TYPE[]? list, ref NativeULong count);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate CK_RV CkInitTokenDelegate(NativeULong slotId, [In] byte[] soPin, NativeULong soPinLength, [In] byte[] label);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate CK_RV CkSetPinDelegate(NativeULong session, [In] byte[] oldPin, NativeULong oldPinLength, [In] byte[] newPin, NativeULong newPinLength);
+
     private CkInitializeDelegate _cInitialize = null!;
     private CkFinalizeDelegate _cFinalize = null!;
     private CkGetInfoDelegate _cGetInfo = null!;
@@ -105,6 +125,14 @@ public sealed partial class Pkcs11Library
     private CkSignDelegate _cSign = null!;
     private CkSignVerifyInitDelegate _cVerifyInit = null!;
     private CkVerifyDelegate _cVerify = null!;
+    private CkDataPartDelegate _cSignUpdate = null!;
+    private CkSignFinalDelegate _cSignFinal = null!;
+    private CkDataPartDelegate _cVerifyUpdate = null!;
+    private CkVerifyFinalDelegate _cVerifyFinal = null!;
+    private CkGetMechanismListDelegate _cGetMechanismList = null!;
+    private CkInitTokenDelegate _cInitToken = null!;
+    private CkDataPartDelegate _cInitPin = null!;
+    private CkSetPinDelegate _cSetPin = null!;
 
     private void BindFunctions()
     {
@@ -133,6 +161,14 @@ public sealed partial class Pkcs11Library
         _cSign = Bind<CkSignDelegate>(_functions.C_Sign, nameof(_functions.C_Sign));
         _cVerifyInit = Bind<CkSignVerifyInitDelegate>(_functions.C_VerifyInit, nameof(_functions.C_VerifyInit));
         _cVerify = Bind<CkVerifyDelegate>(_functions.C_Verify, nameof(_functions.C_Verify));
+        _cSignUpdate = Bind<CkDataPartDelegate>(_functions.C_SignUpdate, nameof(_functions.C_SignUpdate));
+        _cSignFinal = Bind<CkSignFinalDelegate>(_functions.C_SignFinal, nameof(_functions.C_SignFinal));
+        _cVerifyUpdate = Bind<CkDataPartDelegate>(_functions.C_VerifyUpdate, nameof(_functions.C_VerifyUpdate));
+        _cVerifyFinal = Bind<CkVerifyFinalDelegate>(_functions.C_VerifyFinal, nameof(_functions.C_VerifyFinal));
+        _cGetMechanismList = Bind<CkGetMechanismListDelegate>(_functions.C_GetMechanismList, nameof(_functions.C_GetMechanismList));
+        _cInitToken = Bind<CkInitTokenDelegate>(_functions.C_InitToken, nameof(_functions.C_InitToken));
+        _cInitPin = Bind<CkDataPartDelegate>(_functions.C_InitPIN, nameof(_functions.C_InitPIN));
+        _cSetPin = Bind<CkSetPinDelegate>(_functions.C_SetPIN, nameof(_functions.C_SetPIN));
     }
 
     private static T Bind<T>(IntPtr pointer, string name) where T : Delegate => pointer == IntPtr.Zero
@@ -171,7 +207,8 @@ public sealed partial class Pkcs11Library
         return info;
     }
 
-    private NativeULong[] GetSlotList(bool tokenPresent)
+    /// <summary>Slot ids (<c>C_GetSlotList</c>), optionally only those with a token present.</summary>
+    public NativeULong[] GetSlotList(bool tokenPresent = true)
     {
         NativeULong count = 0;
         CheckRv(_cGetSlotList(tokenPresent, null, ref count), "C_GetSlotList");
@@ -182,19 +219,31 @@ public sealed partial class Pkcs11Library
         return slotList[..(int)count];
     }
 
-    private CK_TOKEN_INFO GetTokenInfo(NativeULong slotId)
+    /// <summary>Token information for a slot (<c>C_GetTokenInfo</c>).</summary>
+    public CK_TOKEN_INFO GetTokenInfo(NativeULong slotId)
     {
         CheckRv(_cGetTokenInfo(slotId, out var info), "C_GetTokenInfo");
         return info;
     }
 
-    internal CK_SLOT_INFO GetSlotInfo(NativeULong slotId)
+    /// <summary>Slot information (<c>C_GetSlotInfo</c>).</summary>
+    public CK_SLOT_INFO GetSlotInfo(NativeULong slotId)
     {
         CheckRv(_cGetSlotInfo(slotId, out var info), "C_GetSlotInfo");
         return info;
     }
 
-    internal CK_TOKEN_INFO TokenInfo(NativeULong slotId) => GetTokenInfo(slotId);
+    /// <summary>The mechanisms a slot's token supports (<c>C_GetMechanismList</c>).</summary>
+    public CK_MECHANISM_TYPE[] GetMechanismList(NativeULong slotId)
+    {
+        NativeULong count = 0;
+        CheckRv(_cGetMechanismList(slotId, null, ref count), "C_GetMechanismList");
+
+        var list = new CK_MECHANISM_TYPE[count];
+        CheckRv(_cGetMechanismList(slotId, list, ref count), "C_GetMechanismList");
+
+        return list[..(int)count];
+    }
 
     private NativeULong OpenSession(NativeULong slotId, NativeULong flags)
     {
@@ -204,7 +253,8 @@ public sealed partial class Pkcs11Library
 
     internal void CloseSession(NativeULong session) => CheckRv(_cCloseSession(session), "C_CloseSession");
 
-    internal void CloseAllSessions(NativeULong slotId) => CheckRv(_cCloseAllSessions(slotId), "C_CloseAllSessions");
+    /// <summary>Closes every session this application has open on a slot (<c>C_CloseAllSessions</c>).</summary>
+    public void CloseAllSessions(NativeULong slotId) => CheckRv(_cCloseAllSessions(slotId), "C_CloseAllSessions");
 
     internal void Login(NativeULong session, CKU userType, byte[]? pin) =>
         CheckRv(_cLogin(session, (NativeULong)userType, pin, (NativeULong)(pin?.Length ?? 0)), "C_Login");
@@ -300,5 +350,70 @@ public sealed partial class Pkcs11Library
             CK_RV.CKR_SIGNATURE_INVALID => false,
             _ => throw new Pkcs11Exception(returnValue, "C_Verify"),
         };
+    }
+
+    // --- multi-part sign / verify --------------------------------------------
+
+    internal void SignUpdate(NativeULong session, byte[] part) =>
+        CheckRv(_cSignUpdate(session, part, (NativeULong)part.Length), "C_SignUpdate");
+
+    internal byte[] SignFinal(NativeULong session)
+    {
+        NativeULong length = 0;
+        CheckRv(_cSignFinal(session, null, ref length), "C_SignFinal", CK_RV.CKR_BUFFER_TOO_SMALL);
+
+        var signature = new byte[length];
+        CheckRv(_cSignFinal(session, signature, ref length), "C_SignFinal");
+
+        return length == (NativeULong)signature.Length ? signature : signature[..(int)length];
+    }
+
+    internal void VerifyUpdate(NativeULong session, byte[] part) =>
+        CheckRv(_cVerifyUpdate(session, part, (NativeULong)part.Length), "C_VerifyUpdate");
+
+    internal bool VerifyFinal(NativeULong session, byte[] signature)
+    {
+        var returnValue = _cVerifyFinal(session, signature, (NativeULong)signature.Length);
+
+        return returnValue switch
+        {
+            CK_RV.CKR_OK => true,
+            CK_RV.CKR_SIGNATURE_INVALID => false,
+            _ => throw new Pkcs11Exception(returnValue, "C_VerifyFinal"),
+        };
+    }
+
+    // --- token / PIN administration ------------------------------------------
+
+    /// <summary>
+    /// Initializes a token in a slot with the SO PIN and label (<c>C_InitToken</c>).
+    /// The slot must have no session open. The label is space-padded to 32 bytes.
+    /// </summary>
+    public void InitializeToken(NativeULong slotId, string securityOfficerPin, string label)
+    {
+        var pin = Encoding.UTF8.GetBytes(securityOfficerPin);
+        CheckRv(_cInitToken(slotId, pin, (NativeULong)pin.Length, EncodeLabel(label)), "C_InitToken");
+    }
+
+    internal void InitPin(NativeULong session, byte[] pin) =>
+        CheckRv(_cInitPin(session, pin, (NativeULong)pin.Length), "C_InitPIN");
+
+    internal void SetPin(NativeULong session, byte[] oldPin, byte[] newPin) =>
+        CheckRv(_cSetPin(session, oldPin, (NativeULong)oldPin.Length, newPin, (NativeULong)newPin.Length), "C_SetPIN");
+
+    /// <summary>PKCS#11 token labels are a fixed 32-byte field, space-padded (not null-terminated).</summary>
+    private static byte[] EncodeLabel(string label)
+    {
+        var bytes = Encoding.UTF8.GetBytes(label);
+        if (bytes.Length > 32)
+        {
+            throw new ArgumentException($"Token label must be at most 32 bytes (got {bytes.Length}).", nameof(label));
+        }
+
+        var buffer = new byte[32];
+        Array.Fill(buffer, (byte)' ');
+        bytes.CopyTo(buffer, 0);
+
+        return buffer;
     }
 }
