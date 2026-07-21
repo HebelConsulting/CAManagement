@@ -1,5 +1,4 @@
 using System.Formats.Asn1;
-using System.Globalization;
 
 namespace CAManagement.X509;
 
@@ -23,11 +22,8 @@ public sealed class CrlBuilder
     /// </summary>
     public ulong CrlNumber { get; init; } = DefaultCrlNumber();
 
-    private static ulong DefaultCrlNumber()
-    {
-        var secondsSinceEpoch = (long)(DateTimeOffset.UtcNow - DateTimeOffset.UnixEpoch).TotalSeconds;
-        return ulong.Parse(secondsSinceEpoch.ToString("X"), NumberStyles.HexNumber);
-    }
+    private static ulong DefaultCrlNumber() =>
+        (ulong)(DateTimeOffset.UtcNow - DateTimeOffset.UnixEpoch).TotalSeconds;
 
     /// <summary>The issuing CA's subject key identifier, if it should be referenced.</summary>
     public byte[]? AuthorityKeyIdentifier { get; init; }
