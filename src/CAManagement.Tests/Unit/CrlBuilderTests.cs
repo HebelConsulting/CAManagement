@@ -15,6 +15,25 @@ public sealed class CrlBuilderTests
     private static readonly byte[] SerialOne = [0x11, 0x22, 0x33, 0x44];
     private static readonly byte[] SerialTwo = [0x55, 0x66, 0x77, 0x88];
 
+    [Fact]
+    public void CrlNumber_defaults_to_unix_epoch_seconds()
+    {
+        var before = (ulong)(DateTimeOffset.UtcNow - DateTimeOffset.UnixEpoch).TotalSeconds;
+
+        var builder = new CrlBuilder { Issuer = CaName, ThisUpdate = DateTimeOffset.UtcNow };
+        var after = (ulong)(DateTimeOffset.UtcNow - DateTimeOffset.UnixEpoch).TotalSeconds;
+
+        Assert.InRange(builder.CrlNumber, before, after);
+    }
+
+    [Fact]
+    public void CrlNumber_can_still_be_overridden()
+    {
+        var builder = new CrlBuilder { Issuer = CaName, ThisUpdate = DateTimeOffset.UtcNow, CrlNumber = 42 };
+
+        Assert.Equal(42UL, builder.CrlNumber);
+    }
+
     private static (byte[] CrlDer, X509Certificate2 CaCertificate) BuildCaAndCrl(ECDsa caKey)
     {
         var parameters = caKey.ExportParameters(includePrivateParameters: false);

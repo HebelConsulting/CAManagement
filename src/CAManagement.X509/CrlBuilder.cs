@@ -1,11 +1,12 @@
 using System.Formats.Asn1;
+using System.Globalization;
 
 namespace CAManagement.X509;
 
 /// <summary>
 /// Builds and signs an RFC 5280 v2 CertificateList. Stateless like
-/// <see cref="CertificateBuilder"/> (SPEC D5): the caller supplies the CRL number
-/// and the revocation entries.
+/// <see cref="CertificateBuilder"/> (SPEC D5): the caller supplies the
+/// revocation entries and may override the CRL number.
 /// </summary>
 public sealed class CrlBuilder
 {
@@ -15,8 +16,18 @@ public sealed class CrlBuilder
 
     public DateTimeOffset? NextUpdate { get; init; }
 
-    /// <summary>RFC 5280 §5.2.3: must increase monotonically per CRL scope.</summary>
-    public required ulong CrlNumber { get; init; }
+    /// <summary>
+    /// RFC 5280 §5.2.3: must increase monotonically per CRL scope. Defaults to the
+    /// current time as seconds since the Unix epoch, which is monotonic for a
+    /// single issuer that publishes at most one CRL per second.
+    /// </summary>
+    public ulong CrlNumber { get; init; } = DefaultCrlNumber();
+
+    private static ulong DefaultCrlNumber()
+    {
+        var secondsSinceEpoch = (long)(DateTimeOffset.UtcNow - DateTimeOffset.UnixEpoch).TotalSeconds;
+        return ulong.Parse(secondsSinceEpoch.ToString("X"), NumberStyles.HexNumber);
+    }
 
     /// <summary>The issuing CA's subject key identifier, if it should be referenced.</summary>
     public byte[]? AuthorityKeyIdentifier { get; init; }
