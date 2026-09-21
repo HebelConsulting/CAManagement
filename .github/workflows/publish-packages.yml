@@ -6,9 +6,13 @@
 # a public package's .nupkg answers 401 anonymously), so it serves consumers who already carry a token;
 # nuget.org is the feed for everyone else, readable with no credentials at all. The GitHub Packages push
 # uses the built-in GITHUB_TOKEN (permissions: packages: write) — no PAT, no stored secret. The nuget.org
-# push needs the NUGET_API_KEY repository secret (a nuget.org API key scoped to push HebelConsulting.*);
-# while that secret is absent the step says so loudly and skips, rather than failing every publish run —
-# the GitHub Packages feed must not be held hostage by the second feed's onboarding.
+# push uses TRUSTED PUBLISHING — no stored secret there either: NuGet/login exchanges this run's GitHub
+# OIDC token for a short-lived nuget.org key, valid only because the nuget.org policy
+# ("PushCAManagement", owner HebelConsulting) pins exactly this repository, this workflow file, and the
+# `public` environment. Three consequences worth knowing before touching this: `id-token: write` is what
+# lets the runner mint the OIDC token; the job MUST declare `environment: public` or the token's claims
+# won't match the policy and the exchange fails; and renaming this workflow file breaks the policy match
+# silently — update the policy on nuget.org in the same change.
 #
 # `--skip-duplicate` makes both pushes idempotent: they upload only when the <Version> in
 # src/Directory.Build.props is new, so every push to main can run this and it no-ops until the version
@@ -37,10 +41,13 @@ on:
 permissions:
   contents: read
   packages: write
+  id-token: write
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # Must match the environment pinned in the nuget.org trusted-publishing policy.
+    environment: public
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -78,24 +85,23 @@ jobs:
           --api-key "${{ secrets.GITHUB_TOKEN }}"
           --skip-duplicate
 
+      - name: NuGet login (trusted publishing)
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: HebelConsulting
+
       - name: Push to nuget.org
-        env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-        run: |
-          set -euo pipefail
-          if [ -z "$NUGET_API_KEY" ]; then
-            echo "::warning title=nuget.org push skipped::The NUGET_API_KEY repository secret is not set, so this run published to GitHub Packages only. Create a nuget.org API key (push scope, glob HebelConsulting.*) and add it with: gh secret set NUGET_API_KEY -R HebelConsulting/CAManagement"
-            exit 0
-          fi
-          dotnet nuget push "dist/nuget/*.nupkg" \
-            --source "https://api.nuget.org/v3/index.json" \
-            --api-key "$NUGET_API_KEY" \
-            --skip-duplicate
+        run: >-
+          dotnet nuget push "dist/nuget/*.nupkg"
+          --source "https://api.nuget.org/v3/index.json"
+          --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}"
+          --skip-duplicate
 
       - name: Report
         run: |
           if [ "${{ steps.feed.outputs.exists }}" = "true" ]; then
             echo "::notice::No-op — ${{ steps.feed.outputs.version }} was already on the feed (see the warning above)."
           else
-            echo "::notice::Published ${{ steps.feed.outputs.version }} to GitHub Packages (and to nuget.org when its key is configured — see the step above)."
+            echo "::notice::Published ${{ steps.feed.outputs.version }} to GitHub Packages and nuget.org."
           fi
