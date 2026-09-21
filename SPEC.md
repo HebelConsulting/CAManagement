@@ -257,6 +257,27 @@ a concrete need arrived, and exactly what it needs was added.
   about the parameter image — a wrong `CK_RSA_PKCS_OAEP_PARAMS` layout would be self-consistent and fail
   only against an independent implementation.
 
+## Key generations for rolling KEKs (added 2026-09-21, issue #1 — hybrid, owner-decided)
+
+Generations of one logical key (the envelope-encryption KEK) accumulate on the token; old generations must
+keep unwrapping old data keys, and "current" is a pointer the consumer holds. Two identification schemes were
+surfaced; the owner chose the **hybrid**:
+
+- **Versioned labels are the routing key** (`kek-v1`, `kek-v2`, …): a wrapped-data-key record stores the
+  label, and unwrap routes by today's exact-label `FindObjects` — no new lookup machinery, and generations
+  read legibly in any HSM admin tool.
+- **`CKA_ID` is written on BOTH halves of every generated pair** (same posture as certificate import:
+  written, not yet searched), so a future ID-addressed consumer — smart cards — finds machine identifiers
+  already present instead of needing a token backfill. `GenerateRsaKeyPair` gained the optional `id`.
+
+**Usage flags swap with purpose** (`Pkcs11KeyPairUsage`): a signing pair carries SIGN/VERIFY, an encryption
+pair DECRYPT/ENCRYPT — never both, because mixed-usage keys are the classic hygiene mistake. **Verified
+caveat**: SoftHSM does not enforce usage flags — an unflagged (or wrongly-flagged) key decrypts happily
+there, so the suite pins only that the flags are *written* as requested; a strict HSM is what refuses
+`C_DecryptInit` on a SIGN-only key with `CKR_KEY_FUNCTION_NOT_PERMITTED`. The template being right *before*
+the first strict HSM is met is the point — an encryption feature proven only against SoftHSM would be
+proven against the one HSM that does not check.
+
 ## Project naming (renamed 2026-07-17)
 Projects/namespaces were renamed to dotted product names — earlier sections may
 use the old names:
