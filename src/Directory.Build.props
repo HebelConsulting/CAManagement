@@ -17,6 +17,14 @@
         <RepositoryType>git</RepositoryType>
         <PackageReadmeFile>README.md</PackageReadmeFile>
 
+        <!-- A change is not done while it introduces (or leaves) a build warning: fix the cause, never
+             suppress. Enforced here rather than as a CI flag so a local build refuses exactly the way CI
+             does. NuGet audit advisories (NU1901-NU1904) are excluded — a freshly published advisory on a
+             transitive dependency must not break every compile mid-task; the CI vulnerable-dependency scan
+             owns blocking those instead, so the exclusion is a handover, not a hole. -->
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+        <WarningsNotAsErrors>NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
+
         <!-- Allow building net10.0-windows TFMs from macOS/Linux. -->
         <EnableWindowsTargeting>true</EnableWindowsTargeting>
 

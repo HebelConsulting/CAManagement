@@ -20,6 +20,12 @@ Guidance for AI assistants working in this repository.
 - Do not make architectural decisions without prior consent — surface options
   and wait.
 - Be explicit about limitations: state caveats plainly rather than hiding them.
+- **Treat warnings as errors.** A change is not done while it introduces (or
+  leaves) a build warning — fix the underlying cause, never suppress. Enforced
+  in `src/Directory.Build.props` (`TreatWarningsAsErrors`), so local builds and
+  CI refuse identically. NuGet audit advisories (NU1901–NU1904) are excluded
+  from the promotion because CI's vulnerable-dependency scan owns blocking
+  those — a handover, not a hole.
 - **No squash merges.** A pull request lands with its individual commits intact
   (merge commit or rebase-merge, never squash) — the commits are part of the
   record, and flattening them discards it. Enforced in the repository settings
