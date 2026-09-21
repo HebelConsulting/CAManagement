@@ -138,7 +138,7 @@ public sealed class CertificateValidationTests
     }
 
     [Fact]
-    public void Openssl_reads_our_pkcs7_bundle()
+    public async Task Openssl_reads_our_pkcs7_bundle()
     {
         if (!File.Exists("/usr/bin/openssl"))
         {
@@ -167,13 +167,13 @@ public sealed class CertificateValidationTests
             }
 
             using var process = Process.Start(startInfo)!;
-            var stdout = process.StandardOutput.ReadToEndAsync();
-            var stderr = process.StandardError.ReadToEndAsync();
-            process.WaitForExit();
+            var stdout = await process.StandardOutput.ReadToEndAsync();
+            var stderr = await process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
 
-            Assert.True(process.ExitCode == 0, stderr.Result);
-            Assert.Contains("P7B Openssl Root", stdout.Result);
-            Assert.Contains("P7B Openssl Intermediate", stdout.Result);
+            Assert.True(process.ExitCode == 0, stderr);
+            Assert.Contains("P7B Openssl Root", stdout);
+            Assert.Contains("P7B Openssl Intermediate", stdout);
         }
         finally
         {

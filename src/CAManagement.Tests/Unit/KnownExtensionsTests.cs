@@ -145,7 +145,7 @@ public sealed class KnownExtensionsTests
     }
 
     [Fact]
-    public void Openssl_renders_a_certificate_carrying_all_new_extensions()
+    public async Task Openssl_renders_a_certificate_carrying_all_new_extensions()
     {
         if (!File.Exists("/usr/bin/openssl"))
         {
@@ -193,12 +193,12 @@ public sealed class KnownExtensionsTests
             }
 
             using var process = Process.Start(startInfo)!;
-            var stdout = process.StandardOutput.ReadToEndAsync();
-            var stderr = process.StandardError.ReadToEndAsync();
-            process.WaitForExit();
-            Assert.True(process.ExitCode == 0, stderr.Result);
+            var stdout = await process.StandardOutput.ReadToEndAsync();
+            var stderr = await process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+            Assert.True(process.ExitCode == 0, stderr);
 
-            var text = stdout.Result;
+            var text = stdout;
             Assert.Contains("DNS:host.example.test", text);
             Assert.Contains("email:ops@example.test", text);
             Assert.Contains("URI:https://example.test", text);
