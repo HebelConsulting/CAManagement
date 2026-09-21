@@ -1,0 +1,79 @@
+# Publishes the three library packages to GitHub Packages — the real feed a consumer references instead of
+# vendoring a .nupkg or a ProjectReference across repositories. First consumer: SimplArchiveEncryption
+# (its ADR 0003: consume, never copy). Mirrors SimplArchive's abi-publish.yml rails.
+#
+# Uses the built-in GITHUB_TOKEN (permissions: packages: write) — no PAT, no stored secret. `--skip-duplicate`
+# makes it idempotent: it uploads only when the <Version> in src/Directory.Build.props is new, so every push
+# to main can run it and it no-ops until the version is bumped.
+#
+# THE TRAP THAT IDEMPOTENCE CREATES, and the guard below: with --skip-duplicate, changing library code
+# WITHOUT bumping the version is a green run that publishes nothing — the feed keeps serving the old bits
+# and every consumer restore looks fine. That exact shape has cost a debugging session before (a bumped
+# consumer waiting on a publish that silently never happened). The guard step therefore emits a prominent
+# warning when this run's paths touched a packable library but the version already exists on the feed.
+# A warning rather than a failure, deliberately: whether a given change deserves a version bump is the
+# maintainer's call — the workflow's job is to make sure the question is SEEN, not to answer it.
+name: Publish packages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/CAManagement.Pkcs11/**"
+      - "src/CAManagement.Pkcs11.Signing/**"
+      - "src/CAManagement.X509/**"
+      - "src/Directory.Build.props"
+      - ".github/workflows/publish-packages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Pack
+        run: ./scripts/pack.sh
+
+      - name: Version already on the feed?
+        id: feed
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/.*<Version>\(.*\)<\/Version>.*/\1/p' src/Directory.Build.props | head -1)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          # GitHub Packages requires auth even to READ; probe with the workflow token.
+          status=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://nuget.pkg.github.com/HebelConsulting/download/hebelconsulting.camanagement.pkcs11/index.json")
+          if [ "$status" = "200" ]; then
+            published=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              "https://nuget.pkg.github.com/HebelConsulting/download/hebelconsulting.camanagement.pkcs11/index.json")
+            if printf '%s' "$published" | grep -q "\"$version\""; then
+              echo "exists=true" >> "$GITHUB_OUTPUT"
+              echo "::warning title=Version $version is already published::This push changed packable sources but src/Directory.Build.props still says $version, so --skip-duplicate will publish NOTHING and the feed keeps serving the old bits. If this change should reach consumers, bump the version."
+              exit 0
+            fi
+          fi
+          echo "exists=false" >> "$GITHUB_OUTPUT"
+
+      - name: Push to GitHub Packages
+        run: >-
+          dotnet nuget push "dist/nuget/*.nupkg"
+          --source "https://nuget.pkg.github.com/HebelConsulting/index.json"
+          --api-key "${{ secrets.GITHUB_TOKEN }}"
+          --skip-duplicate
+
+      - name: Report
+        run: |
+          if [ "${{ steps.feed.outputs.exists }}" = "true" ]; then
+            echo "::notice::No-op — ${{ steps.feed.outputs.version }} was already on the feed (see the warning above)."
+          else
+            echo "::notice::Published ${{ steps.feed.outputs.version }} to GitHub Packages."
+          fi

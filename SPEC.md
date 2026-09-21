@@ -185,8 +185,13 @@ still holds for the *library* — hosts that want config files keep `AddPkcs11`.
   not packable.
 - Verified by consuming from a scratch project via a local feed: transitive
   dependency resolution plus real API usage (DN parse, issuance, validation).
-- Publishing to nuget.org (API key, prefix reservation, CI) is a manual step
-  left to the maintainer.
+- **Publishing to GitHub Packages is CI-automated** (added 2026-09-21, issue #1):
+  `.github/workflows/publish-packages.yml` packs and pushes on every `main` push touching a packable
+  library, idempotent via `--skip-duplicate`. The idempotence carries a known trap — library changed but
+  version unbumped is a green run that publishes NOTHING — so the workflow probes the feed first and emits a
+  prominent warning for exactly that condition; whether a change deserves a bump stays the maintainer's
+  call. Publishing to **nuget.org** (API key, prefix reservation) remains a manual step left to the
+  maintainer.
 
 ## CA state on token (added 2026-07-18, closes the D5 deferral)
 - `--state token` on revoke/gen-crl/ocsp-respond keeps the CA state (CRL
