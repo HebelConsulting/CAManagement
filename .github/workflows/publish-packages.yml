@@ -8,8 +8,10 @@
 # uses the built-in GITHUB_TOKEN (permissions: packages: write) — no PAT, no stored secret. The nuget.org
 # push uses TRUSTED PUBLISHING — no stored secret there either: NuGet/login exchanges this run's GitHub
 # OIDC token for a short-lived nuget.org key, valid only because the nuget.org policy
-# ("PushCAManagement", owner HebelConsulting) pins exactly this repository, this workflow file, and the
-# `public` environment. Three consequences worth knowing before touching this: `id-token: write` is what
+# ("PushCAManagement", created by user `monacense`, package owner HebelConsulting) pins exactly this
+# repository, this workflow file, and the `public` environment. The login's `user:` names the policy
+# CREATOR, not the package owner — nuget.org's token service matches policies by creator, and giving it
+# the owner is a bare 401. Three consequences worth knowing before touching this: `id-token: write` is what
 # lets the runner mint the OIDC token; the job MUST declare `environment: public` or the token's claims
 # won't match the policy and the exchange fails; and renaming this workflow file breaks the policy match
 # silently — update the policy on nuget.org in the same change.
@@ -89,7 +91,7 @@ jobs:
         id: nuget-login
         uses: NuGet/login@v1
         with:
-          user: HebelConsulting
+          user: monacense
 
       - name: Push to nuget.org
         run: >-

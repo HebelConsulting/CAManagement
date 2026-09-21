@@ -191,9 +191,11 @@ still holds for the *library* — hosts that want config files keep `AddPkcs11`.
   version unbumped is a green run that publishes NOTHING — so the workflow probes the feed first and emits a
   prominent warning for exactly that condition; whether a change deserves a bump stays the maintainer's
   call. **nuget.org is a second push in the same workflow** (added 2026-09-21), authenticated by
-  **trusted publishing** rather than a stored key: the nuget.org policy ("PushCAManagement", owner
-  HebelConsulting, glob `HebelConsulting*`) pins this repository + `publish-packages.yml` + the
-  `public` environment, and `NuGet/login` exchanges the run's OIDC token for a short-lived push key.
+  **trusted publishing** rather than a stored key: the nuget.org policy ("PushCAManagement", created by
+  `monacense`, package owner HebelConsulting, glob `HebelConsulting*`) pins this repository +
+  `publish-packages.yml` + the `public` environment, and `NuGet/login` exchanges the run's OIDC token
+  for a short-lived push key — its `user:` input names the policy CREATOR, not the package owner
+  (giving it the owner is a bare 401, measured on the first attempt).
   No secret exists to rotate or leak; the flip side is that renaming the workflow file or dropping the
   job's `environment: public` breaks the policy match and the exchange fails. Same `--skip-duplicate`
   idempotence on both feeds. nuget.org is the anonymous-read feed — GitHub Packages answers 401 even
