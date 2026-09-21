@@ -190,8 +190,13 @@ still holds for the *library* — hosts that want config files keep `AddPkcs11`.
   library, idempotent via `--skip-duplicate`. The idempotence carries a known trap — library changed but
   version unbumped is a green run that publishes NOTHING — so the workflow probes the feed first and emits a
   prominent warning for exactly that condition; whether a change deserves a bump stays the maintainer's
-  call. Publishing to **nuget.org** (API key, prefix reservation) remains a manual step left to the
-  maintainer.
+  call. **nuget.org is a second push in the same workflow** (added 2026-09-21): gated on the
+  `NUGET_API_KEY` repository secret — absent, the step warns and skips so the GitHub Packages feed is
+  never held hostage by the second feed's onboarding; present, the same `--skip-duplicate` idempotence
+  applies. nuget.org is the anonymous-read feed — GitHub Packages answers 401 even for a public
+  package's `.nupkg` (verified empirically 2026-09-21), so consumers without a GitHub token get the
+  packages from nuget.org instead. Reserving the `HebelConsulting.*` prefix on nuget.org stays a
+  manual, optional maintainer step.
 
 ## CA state on token (added 2026-07-18, closes the D5 deferral)
 - `--state token` on revoke/gen-crl/ocsp-respond keeps the CA state (CRL

@@ -1,10 +1,18 @@
-# Publishes the three library packages to GitHub Packages — the real feed a consumer references instead of
-# vendoring a .nupkg or a ProjectReference across repositories. First consumer: SimplArchiveEncryption
-# (its ADR 0003: consume, never copy). Mirrors SimplArchive's abi-publish.yml rails.
+# Publishes the three library packages to GitHub Packages AND nuget.org — the real feeds a consumer
+# references instead of vendoring a .nupkg or a ProjectReference across repositories. First consumer:
+# SimplArchiveEncryption (its ADR 0003: consume, never copy). Mirrors SimplArchive's abi-publish.yml rails.
 #
-# Uses the built-in GITHUB_TOKEN (permissions: packages: write) — no PAT, no stored secret. `--skip-duplicate`
-# makes it idempotent: it uploads only when the <Version> in src/Directory.Build.props is new, so every push
-# to main can run it and it no-ops until the version is bumped.
+# Two feeds, one asymmetry: GitHub Packages requires authentication even to READ (verified empirically —
+# a public package's .nupkg answers 401 anonymously), so it serves consumers who already carry a token;
+# nuget.org is the feed for everyone else, readable with no credentials at all. The GitHub Packages push
+# uses the built-in GITHUB_TOKEN (permissions: packages: write) — no PAT, no stored secret. The nuget.org
+# push needs the NUGET_API_KEY repository secret (a nuget.org API key scoped to push HebelConsulting.*);
+# while that secret is absent the step says so loudly and skips, rather than failing every publish run —
+# the GitHub Packages feed must not be held hostage by the second feed's onboarding.
+#
+# `--skip-duplicate` makes both pushes idempotent: they upload only when the <Version> in
+# src/Directory.Build.props is new, so every push to main can run this and it no-ops until the version
+# is bumped.
 #
 # THE TRAP THAT IDEMPOTENCE CREATES, and the guard below: with --skip-duplicate, changing library code
 # WITHOUT bumping the version is a green run that publishes nothing — the feed keeps serving the old bits
@@ -70,10 +78,24 @@ jobs:
           --api-key "${{ secrets.GITHUB_TOKEN }}"
           --skip-duplicate
 
+      - name: Push to nuget.org
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$NUGET_API_KEY" ]; then
+            echo "::warning title=nuget.org push skipped::The NUGET_API_KEY repository secret is not set, so this run published to GitHub Packages only. Create a nuget.org API key (push scope, glob HebelConsulting.*) and add it with: gh secret set NUGET_API_KEY -R HebelConsulting/CAManagement"
+            exit 0
+          fi
+          dotnet nuget push "dist/nuget/*.nupkg" \
+            --source "https://api.nuget.org/v3/index.json" \
+            --api-key "$NUGET_API_KEY" \
+            --skip-duplicate
+
       - name: Report
         run: |
           if [ "${{ steps.feed.outputs.exists }}" = "true" ]; then
             echo "::notice::No-op — ${{ steps.feed.outputs.version }} was already on the feed (see the warning above)."
           else
-            echo "::notice::Published ${{ steps.feed.outputs.version }} to GitHub Packages."
+            echo "::notice::Published ${{ steps.feed.outputs.version }} to GitHub Packages (and to nuget.org when its key is configured — see the step above)."
           fi
