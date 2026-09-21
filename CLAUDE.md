@@ -20,6 +20,10 @@ Guidance for AI assistants working in this repository.
 - Do not make architectural decisions without prior consent — surface options
   and wait.
 - Be explicit about limitations: state caveats plainly rather than hiding them.
+- **No squash merges.** A pull request lands with its individual commits intact
+  (merge commit or rebase-merge, never squash) — the commits are part of the
+  record, and flattening them discards it. Enforced in the repository settings
+  (squash merging is disabled), so the wrong button does not exist.
 
 ## Layout
 
