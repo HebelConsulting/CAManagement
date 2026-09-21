@@ -38,31 +38,54 @@ public sealed class Pkcs11Session : IDisposable
     internal void Logout() => _library.Logout(Handle);
 
     public (NativeULong publicKey, NativeULong privateKey) GenerateRsaKeyPair(
-        string label, NativeULong modulusBits = 2048, byte[]? publicExponent = null)
+        string label, NativeULong modulusBits = 2048, byte[]? publicExponent = null,
+        byte[]? id = null, Pkcs11KeyPairUsage usage = Pkcs11KeyPairUsage.Signing)
     {
         using var scope = new NativeAllocationScope();
 
-        var publicTemplate = new[]
+        // Usage flags SWAP with the purpose rather than accumulate: a signing key must not decrypt and an
+        // encryption key must not sign — mixed-usage keys are the classic key-hygiene mistake, and the
+        // template is where it is prevented. SoftHSM does not enforce these flags (an unflagged key
+        // decrypts happily there), so only a strict HSM proves the distinction — which is exactly why the
+        // template must be right BEFORE such an HSM is first met.
+        var publicUsage = usage == Pkcs11KeyPairUsage.Signing
+            ? scope.Attribute(CKA_VERIFY, true)
+            : scope.Attribute(CKA_ENCRYPT, true);
+        var privateUsage = usage == Pkcs11KeyPairUsage.Signing
+            ? scope.Attribute(CKA_SIGN, true)
+            : scope.Attribute(CKA_DECRYPT, true);
+
+        var publicTemplate = new List<CK_ATTRIBUTE>
         {
             scope.Attribute(CKA_TOKEN, true),
             scope.Attribute(CKA_LABEL, label),
-            scope.Attribute(CKA_VERIFY, true),
+            publicUsage,
             scope.Attribute(CKA_MODULUS_BITS, modulusBits),
             scope.Attribute(CKA_PUBLIC_EXPONENT, publicExponent ?? DefaultPublicExponent),
         };
 
-        var privateTemplate = new[]
+        var privateTemplate = new List<CK_ATTRIBUTE>
         {
             scope.Attribute(CKA_TOKEN, true),
             scope.Attribute(CKA_LABEL, label),
             scope.Attribute(CKA_PRIVATE, true),
             scope.Attribute(CKA_SENSITIVE, true),
-            scope.Attribute(CKA_SIGN, true),
+            privateUsage,
         };
+
+        // CKA_ID on BOTH halves — the PKCS#11 convention the attribute exists for: the halves of one pair
+        // (and later its certificate) share the ID. Written whenever the caller supplies one, searched by
+        // nobody yet; key GENERATIONS route by versioned label today and the ID is what a future
+        // ID-addressed consumer (smart cards) finds already present instead of needing a token backfill.
+        if (id is not null)
+        {
+            publicTemplate.Add(scope.Attribute(CKA_ID, id));
+            privateTemplate.Add(scope.Attribute(CKA_ID, id));
+        }
 
         var mechanism = new CK_MECHANISM { Mechanism = CK_MECHANISM_TYPE.CKM_RSA_PKCS_KEY_PAIR_GEN };
 
-        return _library.GenerateKeyPair(Handle, mechanism, publicTemplate, privateTemplate);
+        return _library.GenerateKeyPair(Handle, mechanism, [.. publicTemplate], [.. privateTemplate]);
     }
 
     public (NativeULong publicKey, NativeULong privateKey) GenerateEcKeyPair(
