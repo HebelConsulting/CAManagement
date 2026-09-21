@@ -88,6 +88,27 @@ public sealed class SoftHsmFixture : IDisposable
     /// EC-signing tests self-skip there — the ABI is proven by EC keygen (same
     /// CK_MECHANISM marshalling) plus the RSA signing round trips.
     /// </summary>
+    /// <summary>Whether this build accepts OAEP with SHA-256 parameters — probed by ATTEMPTING the
+    /// operation, because mechanism presence cannot answer it: SoftHSM 2.7.0 advertises
+    /// <c>CKM_RSA_PKCS_OAEP</c> and then rejects any hash but SHA-1 in the parameter block with
+    /// <c>CKR_ARGUMENTS_BAD</c> (verified 2026-09-21; the SHA-1 tests are the unconditional floor).</summary>
+    public bool SupportsRsaOaepSha256()
+    {
+        using var library = new Pkcs11Library(CreateOptions());
+        using var session = library.OpenSession();
+        using var login = session.Login(UserPin);
+        var (publicKey, _) = session.GenerateRsaKeyPair($"probe-{Guid.NewGuid():N}");
+        try
+        {
+            session.EncryptRsaOaep([1], publicKey, CK_MECHANISM_TYPE.CKM_SHA256);
+            return true;
+        }
+        catch (Pkcs11Exception)
+        {
+            return false;
+        }
+    }
+
     public bool SupportsEcdsaSha256()
     {
         using var library = new Pkcs11Library(CreateOptions());
