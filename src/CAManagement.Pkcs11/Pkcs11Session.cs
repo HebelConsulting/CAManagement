@@ -218,6 +218,72 @@ public sealed class Pkcs11Session : IDisposable
     public bool Verify(CK_MECHANISM_TYPE mechanismType, byte[] data, byte[] signature) =>
         Verify(mechanismType, data, signature, SingleObject(FindObjects(CKO_PUBLIC_KEY, Mechanisms.KeyTypeFor(mechanismType))));
 
+    /// <summary>Encrypts <paramref name="data"/> with the given key handle and a parameterless mechanism.</summary>
+    public byte[] Encrypt(CK_MECHANISM_TYPE mechanismType, byte[] data, NativeULong keyHandle)
+    {
+        _library.EncryptInit(Handle, new CK_MECHANISM { Mechanism = mechanismType }, keyHandle);
+
+        return _library.Encrypt(Handle, data);
+    }
+
+    /// <summary>Decrypts <paramref name="data"/> with the given key handle and a parameterless mechanism.</summary>
+    public byte[] Decrypt(CK_MECHANISM_TYPE mechanismType, byte[] data, NativeULong keyHandle)
+    {
+        _library.DecryptInit(Handle, new CK_MECHANISM { Mechanism = mechanismType }, keyHandle);
+
+        return _library.Decrypt(Handle, data);
+    }
+
+    /// <summary>Encrypts under RSA-OAEP with the given public key — the wrap half of envelope encryption,
+    /// present mostly so the two directions can be round-tripped against one token in tests; a consumer
+    /// holding the public key can (and normally should) wrap in software without a token round-trip.</summary>
+    public byte[] EncryptRsaOaep(byte[] data, NativeULong publicKeyHandle,
+        CK_MECHANISM_TYPE hashAlgorithm = CK_MECHANISM_TYPE.CKM_SHA256)
+    {
+        using var scope = new NativeAllocationScope();
+
+        _library.EncryptInit(Handle, OaepMechanism(scope, hashAlgorithm), publicKeyHandle);
+
+        return _library.Encrypt(Handle, data);
+    }
+
+    /// <summary>
+    /// Decrypts under RSA-OAEP with the given private key — the UNWRAP half of envelope encryption, and the
+    /// reason encrypt/decrypt exist here at all: a consumer wraps a small data key in software against the
+    /// token key's public half, and this is the only operation that needs the token. The hash defaults to
+    /// SHA-256 to match .NET's <c>RSAEncryptionPadding.OaepSHA256</c> (MGF1 pairs automatically, RFC 8017).
+    /// </summary>
+    public byte[] DecryptRsaOaep(byte[] data, NativeULong privateKeyHandle,
+        CK_MECHANISM_TYPE hashAlgorithm = CK_MECHANISM_TYPE.CKM_SHA256)
+    {
+        using var scope = new NativeAllocationScope();
+
+        _library.DecryptInit(Handle, OaepMechanism(scope, hashAlgorithm), privateKeyHandle);
+
+        return _library.Decrypt(Handle, data);
+    }
+
+    /// <summary>Builds the OAEP mechanism; the parameter block lives in <paramref name="scope"/>, which must
+    /// outlive the whole init+operate pair — the module may read it on either call.</summary>
+    private static CK_MECHANISM OaepMechanism(NativeAllocationScope scope, CK_MECHANISM_TYPE hashAlgorithm)
+    {
+        var parameters = new CK_RSA_PKCS_OAEP_PARAMS
+        {
+            HashAlgorithm = hashAlgorithm,
+            Mgf = Mechanisms.Mgf1For(hashAlgorithm),
+            Source = CK_RSA_PKCS_OAEP_SOURCE_TYPE.CKZ_DATA_SPECIFIED,
+            SourceData = IntPtr.Zero,
+            SourceDataLength = 0,
+        };
+
+        return new CK_MECHANISM
+        {
+            Mechanism = CK_MECHANISM_TYPE.CKM_RSA_PKCS_OAEP,
+            Parameter = scope.Allocate(in parameters),
+            ParameterLength = (NativeULong)System.Runtime.InteropServices.Marshal.SizeOf<CK_RSA_PKCS_OAEP_PARAMS>(),
+        };
+    }
+
     /// <summary>
     /// Signs a stream of parts (<c>C_SignInit</c> / <c>C_SignUpdate…</c> /
     /// <c>C_SignFinal</c>) — for data too large to hold in one buffer. The

@@ -20,4 +20,16 @@ public sealed class MechanismsTests
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => Mechanisms.KeyTypeFor(CK_MECHANISM_TYPE.CKM_AES_GCM));
     }
+
+    [Theory]
+    [InlineData(CK_MECHANISM_TYPE.CKM_SHA_1, CK_RSA_PKCS_MGF_TYPE.CKG_MGF1_SHA1)]
+    [InlineData(CK_MECHANISM_TYPE.CKM_SHA256, CK_RSA_PKCS_MGF_TYPE.CKG_MGF1_SHA256)]
+    [InlineData(CK_MECHANISM_TYPE.CKM_SHA384, CK_RSA_PKCS_MGF_TYPE.CKG_MGF1_SHA384)]
+    [InlineData(CK_MECHANISM_TYPE.CKM_SHA512, CK_RSA_PKCS_MGF_TYPE.CKG_MGF1_SHA512)]
+    public void Mgf1_pairs_with_its_hash(CK_MECHANISM_TYPE hash, CK_RSA_PKCS_MGF_TYPE expected) =>
+        Assert.Equal(expected, Mechanisms.Mgf1For(hash));
+
+    [Fact]
+    public void Mgf1_for_a_non_hash_mechanism_throws() =>
+        Assert.Throws<ArgumentOutOfRangeException>(() => Mechanisms.Mgf1For(CK_MECHANISM_TYPE.CKM_RSA_PKCS));
 }

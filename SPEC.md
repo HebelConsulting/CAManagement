@@ -225,6 +225,33 @@ still holds for the *library* — hosts that want config files keep `AddPkcs11`.
 - Verified: arm64 natively (real workload), osx-x64 under Rosetta, linux-x64
   in a linux/amd64 Debian container (help + analyzer workload).
 
+## Encrypt/decrypt for envelope encryption (added 2026-09-21, issue #1)
+
+Added for [SimplArchiveEncryption](https://github.com/HebelConsulting/SimplArchiveEncryption), whose only
+token-bound operation is unwrapping a small data key with a token-resident private key — bulk crypto never
+goes through PKCS#11. This realises the "sanctioned first additions" carve-out in the completeness section:
+a concrete need arrived, and exactly what it needs was added.
+
+- **Bound**: `C_EncryptInit` / `C_Encrypt` / `C_DecryptInit` / `C_Decrypt`, reusing the existing
+  sign/verify delegate shapes (the C header agrees; no new delegate types). Session surface:
+  `Encrypt`/`Decrypt` (parameterless mechanisms) and `EncryptRsaOaep`/`DecryptRsaOaep`, which are the first
+  consumers of `CK_RSA_PKCS_OAEP_PARAMS` and of mechanism parameters at all. `NativeAllocationScope` gained
+  `Allocate<T>(in T)` for parameter blocks; the scope must outlive the whole init+operate pair.
+- **Still deliberately omitted**: multi-part encrypt/decrypt (the payloads are 32-byte keys), `C_WrapKey` /
+  `C_UnwrapKey` (the consumer needs the key bytes in its process, which is what `C_Decrypt` returns — unwrap
+  would strand them on the token), `C_GenerateKey`, `C_GenerateRandom`, and the AES-GCM / key-wrap parameter
+  structs. Same rule as before: the next concrete need unlocks them, nothing speculative.
+- **Verified caveat — SoftHSM 2.7.0 accepts OAEP with SHA-1 only.** It advertises `CKM_RSA_PKCS_OAEP` via
+  `C_GetMechanismList` and then rejects any parameter hash but SHA-1 with `CKR_ARGUMENTS_BAD` at
+  `C_EncryptInit`/`C_DecryptInit`. A mechanism-presence probe therefore CANNOT see this restriction; the
+  test fixture probes by attempting the operation (`SupportsRsaOaepSha256`), the SHA-1 tests are the
+  unconditional floor, and the SHA-256 twins self-skip. Found the hard way: the first SHA-256 init failed
+  against a byte-perfect parameter block, which read exactly like a marshalling bug and was not one.
+- **The interop test is the load-bearing one**: a data key wrapped in software (.NET `RSA`, OAEP) against
+  the token key's exported SPKI must be unwrapped by the token. An on-token round trip alone proves nothing
+  about the parameter image — a wrong `CK_RSA_PKCS_OAEP_PARAMS` layout would be self-consistent and fail
+  only against an independent implementation.
+
 ## Project naming (renamed 2026-07-17)
 Projects/namespaces were renamed to dotted product names — earlier sections may
 use the old names:

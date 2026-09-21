@@ -24,7 +24,7 @@ need:
 
 | Project | Package id | Purpose |
 |---------|-----------|---------|
-| `CAManagement.Pkcs11` | `HebelConsulting.CAManagement.Pkcs11` | PKCS#11 v2.40 interop — sessions, key generation, sign/verify, objects. Configurable module. |
+| `CAManagement.Pkcs11` | `HebelConsulting.CAManagement.Pkcs11` | PKCS#11 v2.40 interop — sessions, key generation, sign/verify, encrypt/decrypt (incl. RSA-OAEP for envelope-encryption unwrap), objects. Configurable module. |
 | `CAManagement.X509` | `HebelConsulting.CAManagement.X509` | X.509/DER authoring on `System.Formats.Asn1`: certificates, CSRs, CRLs, OCSP, chain validation, and a certutil-style analyzer. No PKCS#11 dependency. |
 | `CAManagement.Pkcs11.Signing` | `HebelConsulting.CAManagement.Pkcs11.Signing` | The adapter that lets `CAManagement.X509` sign with a token key. |
 | `CAManagement.Cli` | — | `caconsole`, the operator's tool. |

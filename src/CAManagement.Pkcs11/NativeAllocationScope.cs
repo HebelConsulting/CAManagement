@@ -27,6 +27,21 @@ public sealed class NativeAllocationScope : IDisposable
         return memory;
     }
 
+    /// <summary>Copies an unmanaged struct (a mechanism-parameter block) into scope-owned memory.</summary>
+    /// <remarks>The struct layouts carry explicit <c>Pack</c> and only blittable fields, so the managed byte
+    /// image IS the native one — which the OAEP round-trip integration test proves end to end against a real
+    /// token, where a marshalling mistake fails loudly instead of corrupting silently.</remarks>
+    public IntPtr Allocate<T>(in T value) where T : unmanaged
+    {
+        unsafe
+        {
+            fixed (T* pointer = &value)
+            {
+                return Allocate(new ReadOnlySpan<byte>(pointer, sizeof(T)));
+            }
+        }
+    }
+
     public CK_ATTRIBUTE Attribute(CK_ATTRIBUTE_TYPE type, ReadOnlySpan<byte> value) => new()
     {
         Type = type,

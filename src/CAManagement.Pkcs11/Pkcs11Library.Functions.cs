@@ -121,6 +121,10 @@ public sealed partial class Pkcs11Library
     private CkFindObjectsInitDelegate _cFindObjectsInit = null!;
     private CkFindObjectsDelegate _cFindObjects = null!;
     private CkSessionHandleDelegate _cFindObjectsFinal = null!;
+    private CkSignVerifyInitDelegate _cEncryptInit = null!;
+    private CkSignDelegate _cEncrypt = null!;
+    private CkSignVerifyInitDelegate _cDecryptInit = null!;
+    private CkSignDelegate _cDecrypt = null!;
     private CkSignVerifyInitDelegate _cSignInit = null!;
     private CkSignDelegate _cSign = null!;
     private CkSignVerifyInitDelegate _cVerifyInit = null!;
@@ -157,6 +161,12 @@ public sealed partial class Pkcs11Library
         _cFindObjectsInit = Bind<CkFindObjectsInitDelegate>(_functions.C_FindObjectsInit, nameof(_functions.C_FindObjectsInit));
         _cFindObjects = Bind<CkFindObjectsDelegate>(_functions.C_FindObjects, nameof(_functions.C_FindObjects));
         _cFindObjectsFinal = Bind<CkSessionHandleDelegate>(_functions.C_FindObjectsFinal, nameof(_functions.C_FindObjectsFinal));
+        // Encrypt/decrypt share the sign/verify delegate SHAPES exactly (init: session+mechanism+key;
+        // operate: in-buffer + two-phase out-buffer), so no new delegate types — the C header agrees.
+        _cEncryptInit = Bind<CkSignVerifyInitDelegate>(_functions.C_EncryptInit, nameof(_functions.C_EncryptInit));
+        _cEncrypt = Bind<CkSignDelegate>(_functions.C_Encrypt, nameof(_functions.C_Encrypt));
+        _cDecryptInit = Bind<CkSignVerifyInitDelegate>(_functions.C_DecryptInit, nameof(_functions.C_DecryptInit));
+        _cDecrypt = Bind<CkSignDelegate>(_functions.C_Decrypt, nameof(_functions.C_Decrypt));
         _cSignInit = Bind<CkSignVerifyInitDelegate>(_functions.C_SignInit, nameof(_functions.C_SignInit));
         _cSign = Bind<CkSignDelegate>(_functions.C_Sign, nameof(_functions.C_Sign));
         _cVerifyInit = Bind<CkSignVerifyInitDelegate>(_functions.C_VerifyInit, nameof(_functions.C_VerifyInit));
@@ -320,6 +330,37 @@ public sealed partial class Pkcs11Library
         CheckRv(_cFindObjectsFinal(session), "C_FindObjectsFinal");
 
         return handles.ToArray();
+    }
+
+    internal void EncryptInit(NativeULong session, CK_MECHANISM mechanism, NativeULong key) =>
+        CheckRv(_cEncryptInit(session, ref mechanism, key), "C_EncryptInit");
+
+    internal byte[] Encrypt(NativeULong session, byte[] data)
+    {
+        // Length-probe: first call with a null buffer reports the size (SPEC #6 carve-out).
+        NativeULong length = 0;
+        CheckRv(_cEncrypt(session, data, (NativeULong)data.Length, null, ref length), "C_Encrypt", CK_RV.CKR_BUFFER_TOO_SMALL);
+
+        var ciphertext = new byte[length];
+        CheckRv(_cEncrypt(session, data, (NativeULong)data.Length, ciphertext, ref length), "C_Encrypt");
+
+        return length == (NativeULong)ciphertext.Length ? ciphertext : ciphertext[..(int)length];
+    }
+
+    internal void DecryptInit(NativeULong session, CK_MECHANISM mechanism, NativeULong key) =>
+        CheckRv(_cDecryptInit(session, ref mechanism, key), "C_DecryptInit");
+
+    internal byte[] Decrypt(NativeULong session, byte[] data)
+    {
+        // The trailing trim matters MORE here than for Sign: RSA decryption reports the modulus size on the
+        // probe and the actual plaintext length (a 32-byte data key, say) only on the real call.
+        NativeULong length = 0;
+        CheckRv(_cDecrypt(session, data, (NativeULong)data.Length, null, ref length), "C_Decrypt", CK_RV.CKR_BUFFER_TOO_SMALL);
+
+        var plaintext = new byte[length];
+        CheckRv(_cDecrypt(session, data, (NativeULong)data.Length, plaintext, ref length), "C_Decrypt");
+
+        return length == (NativeULong)plaintext.Length ? plaintext : plaintext[..(int)length];
     }
 
     internal void SignInit(NativeULong session, CK_MECHANISM mechanism, NativeULong key) =>
