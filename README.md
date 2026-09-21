@@ -208,6 +208,24 @@ shown as structure with its KDF parameters; secrets stay opaque.
 
 ## Using the libraries
 
+The packages are published to **GitHub Packages** on every push to `main` that bumps the shared `<Version>`
+in `src/Directory.Build.props`:
+
+```xml
+<PackageReference Include="HebelConsulting.CAManagement.Pkcs11" Version="0.1.0" />
+```
+
+with the feed registered as a source:
+
+```xml
+<add key="hebelconsulting" value="https://nuget.pkg.github.com/HebelConsulting/index.json" />
+```
+
+**GitHub Packages requires authentication even to read** — this repository being public does not make its
+feed anonymous. A consumer authenticates with any token carrying `read:packages` (CI uses its own
+`GITHUB_TOKEN`; locally, `NuGetPackageSourceCredentials_hebelconsulting="Username=<user>;Password=<token>"`
+— the exact environment-variable spelling matters, a wrong form is a bare 401).
+
 Issue a certificate with a software key (swap `ICertificateSigner` for the
 PKCS#11 one to sign on a token):
 
