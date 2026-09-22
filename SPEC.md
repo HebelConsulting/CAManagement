@@ -89,6 +89,16 @@ public sealed class Pkcs11Options
 - **Struct packing**: `CK_SLOT_INFO`/`CK_C_INITIALIZE_ARGS` had `Pack=1`, which
   drops trailing padding and under-sizes the marshalled buffer on Unix LP64.
   Standardized on natural alignment (SPEC #4).
+- **A mechanism/key-type mismatch is a PROCESS CRASH, not a CKR error.** Asking
+  SoftHSM to `C_Sign` with an RSA mechanism against an EC key segfaults inside
+  the module (`OSSLRSA::signFinal → RSA_sign → RSA_size(NULL)`) — exit 139,
+  zero output, only the OS crash report to read (verified 2026-09-22 via a
+  consumer that hardcoded `Sha256WithRsa` against an EC CA; issue #9).
+  `Pkcs11CertificateSigner` therefore validates `CKA_KEY_TYPE` against the
+  requested algorithm at construction and throws a message naming both sides,
+  and `Pkcs11CertificateSigner.ForKey` derives the algorithm from the key so a
+  "sign with this key" caller cannot mismatch at all (the CLI's `LoadCaKey`
+  now goes through it). Covered by `SignerKeyTypeTests`.
 
 ## DataStructures completeness (verified against `published/2-40-errata-1` headers)
 - **All constants complete**: every `#define` in pkcs11t.h (CKR/CKA/CKM/CKK/CKO/

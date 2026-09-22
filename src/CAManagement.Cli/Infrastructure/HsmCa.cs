@@ -30,14 +30,9 @@ public sealed class HsmCa : IDisposable
         var privateKey = SingleHandle(session.FindObjects(CK_OBJECT_CLASS.CKO_PRIVATE_KEY, label), label, "private");
         var publicKey = SingleHandle(session.FindObjects(CK_OBJECT_CLASS.CKO_PUBLIC_KEY, label), label, "public");
 
-        var algorithm = session.GetKeyType(privateKey) switch
-        {
-            CK_KEY_TYPE.CKK_RSA => SignatureAlgorithm.Sha256WithRsa,
-            CK_KEY_TYPE.CKK_ECDSA => SignatureAlgorithm.EcdsaWithSha256,
-            var keyType => throw new NotSupportedException($"Unsupported CA key type {keyType}."),
-        };
-
-        return (new Pkcs11CertificateSigner(session, privateKey, algorithm), Pkcs11PublicKeyReader.Read(session, publicKey));
+        // The algorithm derivation moved into the signer itself (issue #9) so every consumer gets it,
+        // not just the CLI — the identity tooling that hardcoded RSA is exactly who this was for.
+        return (Pkcs11CertificateSigner.ForKey(session, privateKey), Pkcs11PublicKeyReader.Read(session, publicKey));
     }
 
     private static NativeULong SingleHandle(IReadOnlyList<NativeULong> handles, string label, string kind) => handles.Count switch

@@ -230,7 +230,11 @@ environment-variable spelling matters, a wrong form is a bare 401). If you only 
 nuget.org and skip all of that.
 
 Issue a certificate with a software key (swap `ICertificateSigner` for the
-PKCS#11 one to sign on a token):
+PKCS#11 one to sign on a token — prefer `Pkcs11CertificateSigner.ForKey(session,
+privateKeyHandle)`, which derives the algorithm from the key's own
+`CKA_KEY_TYPE` and cannot mismatch; the explicit-algorithm constructor validates
+the key type up front and throws, because SoftHSM answers a mechanism/key
+mismatch by crashing the process rather than returning an error):
 
 ```csharp
 using CAManagement.X509;
