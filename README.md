@@ -63,10 +63,23 @@ it elsewhere (a YubiKey PKCS#11 library, a vendor HSM) with `--module`.
 
 ## Manual
 
-`caconsole` is a self-contained binary — no runtime install required on the
+Install it as a .NET tool from nuget.org — no credentials, nothing to build:
+
+```sh
+dotnet tool install --global HebelConsulting.CAManagement.Cli
+caconsole list-slots
+```
+
+**On Linux and macOS.** The tool package targets `net10.0` only, because
+`PackAsTool` cannot carry a platform-specific target framework (NETSDK1146) and
+Windows needs its own: there `CK_ULONG` is 4 bytes (LLP64), which is what the
+`net10.0-windows` target exists for. So on **Windows**, use the self-contained
+binary rather than the tool package.
+
+`caconsole` is also a self-contained binary — no runtime install required on the
 target. Build one with `scripts/publish.sh` (produces `dist/<rid>/caconsole`
 for `osx-arm64`, `osx-x64`, `linux-x64`, `win-x64`), or run from source with
-`dotnet run --project src/CAManagement.Cli --`.
+`dotnet run --project src/CAManagement.Cli --framework net10.0 --`.
 
 ### Connecting to the token
 
@@ -284,7 +297,7 @@ a plain `net10.0` app on Windows would pick the LP64 build and corrupt every
 dotnet build  CAManagement.sln -c Release
 dotnet test   CAManagement.sln              # 157 tests; integration tests need SoftHSM2
 scripts/publish.sh                          # self-contained caconsole per platform
-scripts/pack.sh                             # the three NuGet packages
+scripts/pack.sh                             # the three libraries + the caconsole tool
 ```
 
 CI (`.github/workflows/ci.yml`) builds, tests and packs on every push and PR

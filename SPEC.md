@@ -146,6 +146,25 @@ public sealed class Pkcs11Options
   arm64 `libsofthsm2.so`. `caconsole info` needs an initialized token in the
   active `SOFTHSM2_CONF`; the default config reports `CKR_TOKEN_NOT_RECOGNIZED`.
 
+## caconsole as a .NET tool (added 2026-09-23)
+- The CLI ships as **`HebelConsulting.CAManagement.Cli`**, a `PackAsTool` package
+  installed with `dotnet tool install --global`, published by the same workflow
+  and the same shared `<Version>` as the three libraries.
+- **Why:** a consumer needs the tool without building this repository. The first
+  is the encryption sibling's container image, which must administer its own
+  PKCS#11 token; its ADR 0003 is "consume, never copy", and a source dependency
+  across repositories would be exactly the copy.
+- **net10.0 only, deliberately.** `PackAsTool` rejects a platform-specific TFM
+  (NETSDK1146), and keeping `net10.0-windows` in the package fails NU5128 — a
+  dependency group with no lib behind it. Packing is therefore gated behind
+  `-p:PackTool=true` (scripts/pack.sh), which switches the CLI to that single
+  target for the pack pass while normal builds stay multi-targeted.
+- **Windows is not served by this package and must not be.** `CK_ULONG` is 4
+  bytes there (LLP64, decision #4), so the net10.0 build would make wrong-ABI
+  calls against a Windows PKCS#11 module — on a tool that administers tokens.
+  Windows keeps the existing channel: the self-contained `win-x64` binary from
+  `scripts/publish.sh`, built from `net10.0-windows`. Stated in both READMEs.
+
 ## Token wiping (added 2026-09-23)
 - `wipe-token` re-initialises a token in place (`C_InitToken`): every object on
   it is destroyed and it takes a new label.
