@@ -1,4 +1,4 @@
-# Publishes the three library packages to GitHub Packages AND nuget.org — the real feeds a consumer
+# Publishes the three library packages and the caconsole tool to GitHub Packages AND nuget.org — the real feeds a consumer
 # references instead of vendoring a .nupkg or a ProjectReference across repositories. First consumer:
 # SimplArchiveEncryption (its ADR 0003: consume, never copy). Mirrors SimplArchive's abi-publish.yml rails.
 #
@@ -36,6 +36,7 @@ on:
       - "src/CAManagement.Pkcs11/**"
       - "src/CAManagement.Pkcs11.Signing/**"
       - "src/CAManagement.X509/**"
+      - "src/CAManagement.Cli/**"
       - "src/Directory.Build.props"
       - ".github/workflows/publish-packages.yml"
   workflow_dispatch:
@@ -59,26 +60,40 @@ jobs:
       - name: Pack
         run: ./scripts/pack.sh
 
-      - name: Version already on the feed?
+      - name: Anything new to publish?
         id: feed
         run: |
           set -euo pipefail
           version=$(sed -n 's/.*<Version>\(.*\)<\/Version>.*/\1/p' src/Directory.Build.props | head -1)
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          # GitHub Packages requires auth even to READ; probe with the workflow token.
-          status=$(curl -s -o /dev/null -w '%{http_code}' \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://nuget.pkg.github.com/HebelConsulting/download/hebelconsulting.camanagement.pkcs11/index.json")
-          if [ "$status" = "200" ]; then
+
+          # Ask about EVERY package this run is about to push, not just one of them. Probing a single
+          # id was wrong the moment a second package id existed: adding the caconsole tool at an
+          # already-published version would have been reported as "publishes NOTHING" while it in fact
+          # published a brand-new package. A guard that cries wolf is one people learn to ignore, which
+          # is the failure it exists to prevent.
+          # GitHub Packages requires auth even to READ; probe with the workflow token. A package id that
+          # does not exist yet simply answers without the version, which counts as new — correct.
+          fresh=0; already=""
+          for nupkg in dist/nuget/*.nupkg; do
+            id=$(basename "$nupkg" ".$version.nupkg" | tr '[:upper:]' '[:lower:]')
             published=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-              "https://nuget.pkg.github.com/HebelConsulting/download/hebelconsulting.camanagement.pkcs11/index.json")
+              "https://nuget.pkg.github.com/HebelConsulting/download/$id/index.json" || true)
             if printf '%s' "$published" | grep -q "\"$version\""; then
-              echo "exists=true" >> "$GITHUB_OUTPUT"
-              echo "::warning title=Version $version is already published::This push changed packable sources but src/Directory.Build.props still says $version, so --skip-duplicate will publish NOTHING and the feed keeps serving the old bits. If this change should reach consumers, bump the version."
-              exit 0
+              already="$already $id"
+            else
+              fresh=$((fresh + 1))
             fi
+          done
+
+          echo "already:$already"
+          if [ "$fresh" -eq 0 ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Version $version is already published::This push changed packable sources but src/Directory.Build.props still says $version, and every package it builds is already on the feed at that version — so --skip-duplicate will publish NOTHING and the feed keeps serving the old bits. If this change should reach consumers, bump the version."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "packages=$fresh" >> "$GITHUB_OUTPUT"
           fi
-          echo "exists=false" >> "$GITHUB_OUTPUT"
 
       - name: Push to GitHub Packages
         run: >-
@@ -105,5 +120,5 @@ jobs:
           if [ "${{ steps.feed.outputs.exists }}" = "true" ]; then
             echo "::notice::No-op — ${{ steps.feed.outputs.version }} was already on the feed (see the warning above)."
           else
-            echo "::notice::Published ${{ steps.feed.outputs.version }} to GitHub Packages and nuget.org."
+            echo "::notice::Published ${{ steps.feed.outputs.version }} to GitHub Packages and nuget.org (${{ steps.feed.outputs.packages }} package(s) new at this version)."
           fi

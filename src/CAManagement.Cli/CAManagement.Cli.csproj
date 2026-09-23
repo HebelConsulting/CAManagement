@@ -13,6 +13,22 @@
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <Company>Hebel Consulting GmbH</Company>
         <AssemblyName>caconsole</AssemblyName>
+        <!-- Shipped as a .NET tool so a consumer installs it instead of building this repo: the
+             encryption sibling's image needs `caconsole` to administer its token, and its ADR 0003 is
+             "consume, never copy". Both TFMs are packed deliberately — the Windows one is not cosmetic,
+             it carries the LLP64 NativeULong alias (SPEC decision #4). -->
+        <!-- The tool is packed only when asked (scripts/pack.sh passes -p:PackTool=true), and then for
+             net10.0 ALONE. PackAsTool refuses a platform-specific TFM (NETSDK1146), and leaving
+             net10.0-windows in the package fails NU5128 — a dependency group with no lib behind it. So
+             Windows keeps its existing channel: the self-contained win-x64 binary from
+             scripts/publish.sh, built from net10.0-windows, which is the only build with the right ABI
+             there (LLP64 CK_ULONG). -->
+        <IsPackable Condition="'$(PackTool)' == 'true'">true</IsPackable>
+        <PackAsTool Condition="'$(PackTool)' == 'true'">true</PackAsTool>
+        <TargetFrameworks Condition="'$(PackTool)' == 'true'">net10.0</TargetFrameworks>
+        <ToolCommandName>caconsole</ToolCommandName>
+        <PackageId>HebelConsulting.CAManagement.Cli</PackageId>
+        <Description>caconsole — PKCS#11 and X.509 from the command line: token administration (list-slots, init-token, set-pin, wipe-token), the CA lifecycle (init-ca, issue, revoke, gen-crl, ocsp-respond), ASN.1 analysis and Apple configuration profiles. Works against any PKCS#11 module.</Description>
         <DebugType>embedded</DebugType>
         <!-- No libicu dependency on Linux targets; deterministic invariant formatting. -->
         <InvariantGlobalization>true</InvariantGlobalization>
