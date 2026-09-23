@@ -90,6 +90,7 @@ Every command that touches the HSM shares these options:
 | `info` | Load the module, print the Cryptoki version and open a session. |
 | `list-slots` | List slots, tokens and supported-mechanism counts (like `softhsm2-util --show-slots`). |
 | `init-token` | Initialise a token — set the SO PIN, label and user PIN (like `softhsm2-util --init-token`). |
+| `wipe-token` | Re-initialise a token in place — destroy every object on it and relabel it (`C_InitToken`). |
 | `set-pin` | Change the token user PIN. |
 | `asn <file>` | Analyse a certificate, CSR, CRL, key, PKCS#12, CMS or OCSP message as an annotated tree. |
 | `init-ca` | Generate a CA key pair on the token and write a self-signed root. |
@@ -102,19 +103,33 @@ Every command that touches the HSM shares these options:
 
 ### Token administration (a softhsm2-util stand-in)
 
-`list-slots`, `init-token` and `set-pin` cover softhsm2-util's day-to-day jobs
-through the standard PKCS#11 calls, against **any** module:
+`list-slots`, `init-token`, `set-pin` and `wipe-token` cover softhsm2-util's
+day-to-day jobs through the standard PKCS#11 calls, against **any** module:
 
 ```sh
 caconsole list-slots
 caconsole init-token --free --label ca --so-pin 123456 --pin 1234
 caconsole set-pin --token-label ca --pin 1234 --new-pin 5678
+caconsole wipe-token --slot 3 --so-pin 123456 --new-label retired-2026-09-23 --yes
 ```
 
 (`--free` picks the first uninitialised slot, or use `--slot <id>`.) Key/cert
-*import* is `C_CreateObject` (used by the CA commands); token *deletion* is a
-SoftHSM-specific extension, not a standard PKCS#11 function, so it is out of
-scope here.
+*import* is `C_CreateObject` (used by the CA commands).
+
+Token **deletion** is a SoftHSM-specific extension rather than a standard
+PKCS#11 function, so it stays out of scope — but the job it is usually wanted
+for does not. `wipe-token` re-initialises a token in place (`C_InitToken`):
+every object on it is destroyed and it takes a new label. That settles the case
+that actually bites — several tokens sharing one label, where a PKCS#11 caller
+resolves the name to whichever slot enumerates first — because the wiped ones
+stop answering to it. What it cannot do is remove the slot; nothing in PKCS#11
+can, which is exactly why the verb is not called `delete-token`.
+
+It is addressed by `--slot` only, never by label: the label is the thing in
+dispute, so resolving by it would pick between the duplicates at random. It
+needs the token's existing SO PIN, refuses to run without `--yes`, and leaves
+behind a token with **no user PIN** — run `init-token` against it, or park it
+under its new label.
 
 ### A complete walk-through
 

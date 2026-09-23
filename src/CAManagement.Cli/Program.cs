@@ -22,6 +22,8 @@ app.Configure(config =>
         .WithDescription("List slots, tokens and supported mechanisms (like softhsm2-util --show-slots).");
     config.AddCommand<InitTokenCommand>("init-token")
         .WithDescription("Initialize a token (SO PIN + label) and set its user PIN.");
+    config.AddCommand<WipeTokenCommand>("wipe-token")
+        .WithDescription("Re-initialize a token in place (C_InitToken): destroy every object on it and relabel it.");
     config.AddCommand<SetPinCommand>("set-pin")
         .WithDescription("Change the token user PIN.");
     config.AddCommand<SignCommand>("sign")

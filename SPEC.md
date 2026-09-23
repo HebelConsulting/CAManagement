@@ -146,6 +146,28 @@ public sealed class Pkcs11Options
   arm64 `libsofthsm2.so`. `caconsole info` needs an initialized token in the
   active `SOFTHSM2_CONF`; the default config reports `CKR_TOKEN_NOT_RECOGNIZED`.
 
+## Token wiping (added 2026-09-23)
+- `wipe-token` re-initialises a token in place (`C_InitToken`): every object on
+  it is destroyed and it takes a new label.
+- **Named for what it does.** PKCS#11 has no delete-token operation and the slot
+  survives, so calling it `delete-token` would promise something the standard
+  cannot deliver. Removing a token *directory* is SoftHSM-specific file surgery
+  and stays out of this tool.
+- **Addressed by `--slot` only.** The reason to wipe a token is normally that its
+  label is ambiguous; resolving by label would pick between the duplicates at
+  random, which is the defect, not the cure.
+- Guardrails: the existing SO PIN is required (C_InitToken authenticates as SO),
+  `--new-label` is mandatory so a wiped token cannot keep colliding under the old
+  one, and `--yes` is mandatory because there is no undo.
+- Caveat stated at the call site and in the README: the wiped token has **no user
+  PIN** afterwards.
+- **Trigger.** A deployment accumulated three tokens all labelled `encryption`
+  because a provisioning script's existence check never matched (SoftHSM pads the
+  label with trailing spaces). The service then resolved the label to a different
+  keypair on each restart and minted a fresh KEK, silently orphaning every
+  previously wrapped key — with a healthy container and every endpoint answering
+  200. Detecting that is issue #12; this verb is the remedy for it.
+
 ## Windows port (added 2026-07-19 — realizes decision #4)
 - `CAManagement.Pkcs11`, `CAManagement.Pkcs11.Signing` and the CLI multi-target
   **net10.0 (Unix LP64) + net10.0-windows (LLP64)**: the `WINDOWS` symbol flips
