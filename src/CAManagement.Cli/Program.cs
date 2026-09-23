@@ -40,6 +40,9 @@ app.Configure(config =>
         .WithDescription("Sign a CRL from the CA state file using the token-resident CA key.");
     config.AddCommand<OcspRespondCommand>("ocsp-respond")
         .WithDescription("Answer OCSP requests (file mode or HTTP) from the CA state file.");
+
+    config.AddCommand<MobileConfigCommand>("mobileconfig")
+        .WithDescription("Build an Apple configuration profile (.mobileconfig) from a PKCS#12 identity and/or root certificates.");
 });
 
 return app.Run(args);
