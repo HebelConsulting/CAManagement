@@ -100,6 +100,17 @@ public sealed class Pkcs11Options
   "sign with this key" caller cannot mismatch at all (the CLI's `LoadCaKey`
   now goes through it). Covered by `SignerKeyTypeTests`.
 
+## Token labels must be unique (Pkcs11 package)
+
+- **A label that resolves to MORE THAN ONE token is refused, not guessed between.** `ResolveSlot` used to
+  return the first match; a consumer whose provisioning created a second token with the same label then
+  opened a session on keys that merely looked right — for envelope encryption that means wrapping against
+  one token and failing to unwrap against another, i.e. silently unreadable data with every call
+  returning success. Found in the wild 2026-09-23 (SimplArchiveEncryption: a "does the token exist?" test
+  anchored immediately after the label never matched, because **SoftHSM pads labels with trailing
+  spaces**, so every restart initialized another token — three ended up sharing one label). Covered by
+  `AmbiguousTokenLabelTests`; pass an explicit `SlotId` when duplicates are legitimate.
+
 ## MobileConfigProfile (X509 package)
 
 - **The `.mobileconfig` builder lives in `CAManagement.X509`, not in a consumer** (added with the

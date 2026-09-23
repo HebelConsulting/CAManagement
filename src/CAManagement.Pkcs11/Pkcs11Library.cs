@@ -89,15 +89,24 @@ public sealed partial class Pkcs11Library : IDisposable
 
         if (_options.TokenLabel is { } label)
         {
-            foreach (var slot in slots)
-            {
-                if (GetTokenInfo(slot).Label.AsPkcs11String() == label)
-                {
-                    return slot;
-                }
-            }
+            // Collected, not first-match-wins. A label is a NAME, and two tokens wearing one name is an
+            // ambiguity the caller cannot see: picking either would open a session on keys that merely
+            // look right, and for an envelope-encryption consumer that means wrapping against one token
+            // and failing to unwrap against another — silently unreadable data, with every call returning
+            // success. Observed in the wild (SimplArchiveEncryption, 2026-09-23): a provisioning script
+            // whose "does the token exist?" test mis-fired created a second token with the same label on
+            // every restart, and the service happily minted fresh keys against it.
+            var matches = slots.Where(slot => GetTokenInfo(slot).Label.AsPkcs11String() == label).ToList();
 
-            throw new InvalidOperationException($"No slot found with a token labelled '{label}'.");
+            return matches.Count switch
+            {
+                1 => matches[0],
+                0 => throw new InvalidOperationException($"No slot found with a token labelled '{label}'."),
+                _ => throw new InvalidOperationException(
+                    $"{matches.Count} tokens are labelled '{label}' (slots {string.Join(", ", matches)}). "
+                    + "Refusing to guess which one holds your keys — pass an explicit SlotId, or remove the "
+                    + "duplicates."),
+            };
         }
 
         return slots.Length > 0
