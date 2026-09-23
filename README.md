@@ -97,6 +97,7 @@ Every command that touches the HSM shares these options:
 | `revoke` | Record a revocation in the CA state. |
 | `gen-crl` | Sign a CRL from the CA state. |
 | `ocsp-respond` | Answer OCSP requests (file mode or an HTTP responder). |
+| `mobileconfig` | Build an Apple configuration profile (`.mobileconfig`) from a PKCS#12 identity and/or root certificates — the one-tap install path for Apple devices. No token involved. |
 | `sign` / `verify` | Sign or verify a file with a token key, using multi-part signing for data of any size. |
 
 ### Token administration (a softhsm2-util stand-in)

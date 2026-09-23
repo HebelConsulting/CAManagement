@@ -100,6 +100,16 @@ public sealed class Pkcs11Options
   "sign with this key" caller cannot mismatch at all (the CLI's `LoadCaKey`
   now goes through it). Covered by `SignerKeyTypeTests`.
 
+## MobileConfigProfile (X509 package)
+
+- **The `.mobileconfig` builder lives in `CAManagement.X509`, not in a consumer** (added with the
+  `caconsole mobileconfig` verb): the SimplArchiveEncryption identity tool carried the first hand-rolled
+  copy of the plist, the CLI verb would have been the second — one implementation, both consume it.
+  Payload types: `com.apple.security.pkcs12` (identity; the password is EMBEDDED so installs do not
+  prompt — the documented hand-delivery trade) and `com.apple.security.root`. Verified against an
+  independent plist parser (python plistlib) in the smoke run and `MobileConfigProfileTests` (XML
+  round-trip incl. escaping of hostile display names).
+
 ## DataStructures completeness (verified against `published/2-40-errata-1` headers)
 - **All constants complete**: every `#define` in pkcs11t.h (CKR/CKA/CKM/CKK/CKO/
   CKC/CKU/CKS/CKD/CKG/CKZ/CKP/CKH/CKN/CKF/CK_*) has a C# representation.
