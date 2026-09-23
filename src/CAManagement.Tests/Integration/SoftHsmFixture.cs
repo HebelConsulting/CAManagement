@@ -19,6 +19,7 @@ public sealed class SoftHsmFixture : IDisposable
     public const string UserPin = "1234";
 
     private readonly string _rootDirectory;
+    private string _configPath = string.Empty;
 
     public SoftHsmFixture()
     {
@@ -48,6 +49,7 @@ public sealed class SoftHsmFixture : IDisposable
             setenv("SOFTHSM2_CONF", configPath, overwrite: 1);
         }
 
+        _configPath = configPath;
         RunSoftHsmUtil($"--init-token --free --label {TokenLabel} --so-pin {SoPin} --pin {UserPin}", configPath);
     }
 
@@ -65,6 +67,11 @@ public sealed class SoftHsmFixture : IDisposable
     internal static string? WindowsModulePath => OperatingSystem.IsWindows()
         ? @"C:\SoftHSM2\lib\softhsm2-x64.dll"
         : null;
+
+    /// <summary>Initializes an ADDITIONAL token in this fixture's throwaway store — how a test can build
+    /// the two-tokens-one-label state that must be refused rather than guessed between.</summary>
+    public void InitializeToken(string label) =>
+        RunSoftHsmUtil($"--init-token --free --label {label} --so-pin {SoPin} --pin {UserPin}", _configPath);
 
     public Pkcs11Options CreateOptions()
     {
