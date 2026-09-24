@@ -81,6 +81,39 @@ target. Build one with `scripts/publish.sh` (produces `dist/<rid>/caconsole`
 for `osx-arm64`, `osx-x64`, `linux-x64`, `win-x64`), or run from source with
 `dotnet run --project src/CAManagement.Cli --framework net10.0 --`.
 
+### Why two distribution forms, and not one self-contained tool
+
+The obvious wish is a single artefact that is both self-contained *and*
+installable with `dotnet tool install`. It is possible, and it was measured
+rather than assumed — but it is the wrong default here, for two reasons.
+
+**It is not "one file".** A self-contained tool package holds a directory of
+assemblies plus the whole runtime; `PublishSingleFile`, which is what
+`scripts/publish.sh` uses, is a different mechanism and is not what `PackAsTool`
+produces. The two cannot be combined into a single-file tool.
+
+**It costs what it sounds like it costs.** Adding a `RuntimeIdentifier` and
+`SelfContained` to the tool package does pack successfully, and produces
+**34.8 MB** against the framework-dependent **1.2 MB** — with `libcoreclr`,
+`System.Private.CoreLib` and `hostpolicy` inside. The package also becomes
+**RID-specific** (`tools/any/osx-arm64/…`), so covering four platforms means
+four packages or one very large one.
+
+**And it would not buy what it appears to.** `dotnet tool install` needs the SDK
+on the target machine — and a machine with the SDK already has a runtime, so the
+self-contained payload is dead weight exactly where it can be used. The split is
+therefore along the line that actually matters:
+
+| You have | Use |
+|---|---|
+| .NET installed (developer, build agent, a container on a .NET base image) | the **tool package** — 1.2 MB, one package for every platform |
+| no .NET at all (an administrator's workstation, a minimal host) | the **self-contained binary** from `scripts/publish.sh` — 72–79 MB per platform, nothing to install |
+
+The first consumer of the tool package is the encryption service's container
+image, whose final stage is `aspnet:10.0-alpine` and therefore already carries
+the runtime — 1.2 MB instead of ~35 MB, for a capability it only uses when an
+administrator runs it.
+
 ### Connecting to the token
 
 Every command that touches the HSM shares these options:
