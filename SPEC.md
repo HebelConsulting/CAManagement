@@ -165,6 +165,25 @@ public sealed class Pkcs11Options
   Windows keeps the existing channel: the self-contained `win-x64` binary from
   `scripts/publish.sh`, built from `net10.0-windows`. Stated in both READMEs.
 
+## Enrolment: csr + import-cert (added 2026-09-24)
+- `csr` builds a PKCS#10 request signed through `ICertificateSigner`, the same seam the CA signs with, so
+  the signing key may live on a token. `CertificateSigningRequestBuilder` is its X509-side half — the class
+  could previously only `Decode`.
+- **Why it was missing matters:** `issue` could sign a request and nothing could produce one, so turning a
+  token-resident key into a certificate required the card vendor's tool. That is per-vendor and therefore
+  per-customer; PKCS#11 is not.
+- `import-cert` stores the issued certificate back on the token. The PKCS#11 layer deliberately does not
+  parse certificates, so the CLI supplies the subject DER — taken from the certificate itself, since an
+  object findable under a name that is not its own is worse than no object.
+- **Tested against the decoder, not against itself.** `Decode` verifies the self-signature and refuses a
+  request that does not, so it is an independent oracle; the framework's own `LoadSigningRequest` is a
+  second one. `EnrolmentLoopTests` runs the whole loop on a real SoftHSM token.
+- **The empty-attributes case is the trap.** `CertificationRequestInfo` requires the `[0] IMPLICIT SET OF
+  Attribute` tag even with nothing to say; omitting it yields a structure that encodes happily and fails at
+  whatever tries to read it.
+- **Out of scope, stated:** key generation and card personalisation (PIV CHUID/CCC, slot choice) are
+  card-applet operations rather than PKCS#11 ones, and stay with the card tooling.
+
 ## Token wiping (added 2026-09-23)
 - `wipe-token` re-initialises a token in place (`C_InitToken`): every object on
   it is destroyed and it takes a new label.

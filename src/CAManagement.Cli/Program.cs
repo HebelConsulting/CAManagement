@@ -34,6 +34,10 @@ app.Configure(config =>
         .WithDescription("Analyze a certificate, CSR, CRL or key file as an annotated ASN.1 tree.");
     config.AddCommand<InitCaCommand>("init-ca")
         .WithDescription("Generate a CA key pair on the token and write a self-signed root certificate.");
+    config.AddCommand<CsrCommand>("csr")
+        .WithDescription("Build a PKCS#10 certificate request, signed by a key that stays on the token.");
+    config.AddCommand<ImportCertCommand>("import-cert")
+        .WithDescription("Store an issued certificate on the token, beside the key it belongs to.");
     config.AddCommand<IssueCommand>("issue")
         .WithDescription("Issue a certificate from a PKCS#10 CSR using the token-resident CA key.");
     config.AddCommand<RevokeCommand>("revoke")
