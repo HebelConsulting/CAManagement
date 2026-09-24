@@ -103,6 +103,8 @@ Every command that touches the HSM shares these options:
 | `info` | Load the module, print the Cryptoki version and open a session. |
 | `list-slots` | List slots, tokens and supported-mechanism counts (like `softhsm2-util --show-slots`). |
 | `init-token` | Initialise a token — set the SO PIN, label and user PIN (like `softhsm2-util --init-token`). |
+| `csr` | Build a PKCS#10 certificate request, signed by a key that stays on the token. |
+| `import-cert` | Store an issued certificate on the token, beside the key it belongs to. |
 | `wipe-token` | Re-initialise a token in place — destroy every object on it and relabel it (`C_InitToken`). |
 | `set-pin` | Change the token user PIN. |
 | `asn <file>` | Analyse a certificate, CSR, CRL, key, PKCS#12, CMS or OCSP message as an annotated tree. |
@@ -143,6 +145,28 @@ dispute, so resolving by it would pick between the duplicates at random. It
 needs the token's existing SO PIN, refuses to run without `--yes`, and leaves
 behind a token with **no user PIN** — run `init-token` against it, or park it
 under its new label.
+
+### Enrolling a key that never leaves the token
+
+`issue` could always sign a request; until `csr` there was no way to *produce* one from a token-resident
+key, so enrolling a smartcard meant the card vendor's own tool — which is per-vendor, and therefore
+per-customer. The loop is now closed with PKCS#11 alone, so it works with any card the module can drive:
+
+```sh
+caconsole csr --token-label card --pin 1234 --label holder \
+  --subject "C=CH, O=Example, CN=Card Holder" --out holder.csr
+caconsole issue --token-label ca --pin 1234 --ca-label root \
+  --ca-cert ca.crt --csr holder.csr --out holder.crt
+caconsole import-cert --token-label card --pin 1234 --label holder --cert holder.crt
+```
+
+The private key is never read at any step: `csr` signs **on** the token, which is also the request's proof
+of possession — `CertificateSigningRequest.Decode` verifies that signature and refuses a request that does
+not carry it.
+
+What is still the card tooling's job is **key generation and card personalisation** (PIV CHUID/CCC, slot
+choice). Those are card-applet operations, not PKCS#11 ones, and `caconsole` deliberately does not reach
+for them.
 
 ### A complete walk-through
 
