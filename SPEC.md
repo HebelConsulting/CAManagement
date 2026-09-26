@@ -100,6 +100,32 @@ public sealed class Pkcs11Options
   "sign with this key" caller cannot mismatch at all (the CLI's `LoadCaKey`
   now goes through it). Covered by `SignerKeyTypeTests`.
 
+## Enumerating a token's objects (added 2026-09-26, version 0.7.0)
+
+`FindObjects` had two overloads, both **requiring a discriminator** — a key type, or an exact label. That serves
+a caller who already knows what it is looking for, and it cannot serve one that has to **enumerate**: *"which
+certificates does this token carry?"* has no label to search by.
+
+`FindObjects(CK_OBJECT_CLASS objectClass)` matches on class and `CKA_TOKEN` alone.
+
+**Why the label overload is not enough, stated because it looks sufficient.** A PIV card has four key slots and
+may carry a certificate in each; OpenSC maps them to fixed labels (`Certificate for Key Management` and its
+siblings), and a non-PIV token may use any labels at all. A consumer narrowing by label therefore hard-codes one
+vendor's slot naming and sees **nothing** on a token that names things differently — a silent empty result, not
+an error. A user may also have **two tokens plugged in**, so the unit to walk is `GetSlotList(tokenPresent: true)`
+and then this call per slot.
+
+Verified on SoftHSM2 (three certificates under unrelated labels, found without any of them, with the class still
+discriminating against the keys sharing the token) and on a **YubiKey 5C Nano** over OpenSC, where it returns the
+PIV Key Management certificate with no label supplied.
+
+**Two measurements worth carrying, both about what this call CANNOT tell you.** Certificates are public objects,
+so enumerating them needs **no login** — but `CKO_PRIVATE_KEY` objects are invisible until `C_Login`, so
+*"does a key for this certificate live on this token?"* cannot be answered before a PIN is collected. And the
+YubiKey's own Key Management certificate, issued by `caconsole`, states `keyUsage = DigitalSignature` only —
+while demonstrably decrypting a real CMS envelope, because neither `EnvelopedCms` nor the token enforces
+`keyUsage`. A consumer that refuses a certificate on `keyUsage` grounds would therefore refuse one that works.
+
 ## Token labels must be unique (Pkcs11 package)
 
 - **A label that resolves to MORE THAN ONE token is refused, not guessed between.** `ResolveSlot` used to

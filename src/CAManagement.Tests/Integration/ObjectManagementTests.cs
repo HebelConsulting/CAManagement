@@ -37,6 +37,59 @@ public sealed class ObjectManagementTests(SoftHsmFixture fixture)
     }
 
     [Fact]
+    public void Finds_every_certificate_on_the_token_without_knowing_a_label()
+    {
+        // The enumerating caller's case, and the one the label overload cannot serve: "which certificates does
+        // this token carry?" has no label to search by. A PIV card has four key slots and can carry a
+        // certificate in each; a non-PIV token may name them anything. Searching by label forces the caller to
+        // hard-code somebody else's slot naming and to see NOTHING on a token that names things differently —
+        // which is the silent failure, not an error.
+        using var library = new Pkcs11Library(fixture.CreateOptions());
+        using var session = library.OpenSession();
+        using var _ = session.Login(SoftHsmFixture.UserPin);
+
+        var before = session.FindObjects(CK_OBJECT_CLASS.CKO_CERTIFICATE);
+
+        var handles = new List<NativeULong>();
+        foreach (var name in new[] { "authentication", "key-management", "signing" })
+        {
+            using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+            var request = new CertificateRequest($"CN={name}", ecdsa, HashAlgorithmName.SHA256);
+            using var certificate = request.CreateSelfSigned(
+                DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+
+            // Deliberately UNRELATED labels, one per object: the point is that the caller needs none of them.
+            handles.Add(session.ImportX509Certificate(
+                $"{name}-{Guid.NewGuid():N}", certificate.RawData, certificate.SubjectName.RawData));
+        }
+
+        try
+        {
+            var found = session.FindObjects(CK_OBJECT_CLASS.CKO_CERTIFICATE);
+
+            Assert.Equal(before.Count + handles.Count, found.Count);
+            foreach (var handle in handles)
+            {
+                Assert.Contains(handle, found);
+            }
+
+            // And the class still discriminates — a search for certificates must not return the keys that
+            // share the token, or the overload has simply dropped the template.
+            Assert.All(found, handle =>
+                Assert.Equal(CK_OBJECT_CLASS.CKO_CERTIFICATE, session.GetObjectClass(handle)));
+        }
+        finally
+        {
+            foreach (var handle in handles)
+            {
+                session.DestroyObject(handle);
+            }
+        }
+
+        Assert.Equal(before.Count, session.FindObjects(CK_OBJECT_CLASS.CKO_CERTIFICATE).Count);
+    }
+
+    [Fact]
     public void Data_objects_round_trip_and_finding_pages_past_64_handles()
     {
         using var library = new Pkcs11Library(fixture.CreateOptions());

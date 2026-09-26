@@ -136,6 +136,30 @@ public sealed class Pkcs11Session : IDisposable
         ? System.Runtime.InteropServices.MemoryMarshal.Read<NativeULong>(value)
         : throw new InvalidOperationException($"Expected a {sizeof(NativeULong)}-byte CK_ULONG value but got {value.Length} bytes.");
 
+    /// <summary>
+    /// Every token object of <paramref name="objectClass"/>, with no further discriminator.
+    /// </summary>
+    /// <remarks>
+    /// The other overloads narrow by key type or by label, which presumes the caller already knows what it is
+    /// looking for. A caller that has to ENUMERATE cannot: "which certificates does this token carry?" has no
+    /// label to search by, and a token may hold several — a PIV card has four key slots and can carry a
+    /// certificate in each, and a non-PIV token may use any labels at all. Narrowing by label is what forces a
+    /// caller to hard-code somebody's slot naming and silently see nothing on a token that names things
+    /// differently.
+    /// </remarks>
+    public IReadOnlyList<NativeULong> FindObjects(CK_OBJECT_CLASS objectClass)
+    {
+        using var scope = new NativeAllocationScope();
+
+        var template = new[]
+        {
+            scope.Attribute(CKA_CLASS, objectClass),
+            scope.Attribute(CKA_TOKEN, true),
+        };
+
+        return _library.FindObjects(Handle, template);
+    }
+
     public IReadOnlyList<NativeULong> FindObjects(CK_OBJECT_CLASS objectClass, CK_KEY_TYPE keyType)
     {
         using var scope = new NativeAllocationScope();
