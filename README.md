@@ -67,8 +67,22 @@ Install it as a .NET tool from nuget.org — no credentials, nothing to build:
 
 ```sh
 dotnet tool install --global HebelConsulting.CAManagement.Cli
+
+# ONCE PER MACHINE: a global tool lands in ~/.dotnet/tools, which is not on PATH
+# by default. Without this the next line fails with "command not found: caconsole".
+export PATH="$PATH:$HOME/.dotnet/tools"   # add to ~/.zshrc or ~/.bashrc to keep it
+
 caconsole list-slots
 ```
+
+**`command not found: caconsole` does not mean the install failed**, and it is the
+first thing most people hit. `dotnet tool install` prints the PATH warning once,
+in passing, on a first install only — so on a machine that has ever had a global
+tool it says nothing at all, and on a fresh one it scrolls past.
+
+Tell the two apart with `dotnet tool list --global`: if the table lists the
+package and the command `caconsole`, the tool is installed and only the PATH is
+missing. `~/.dotnet/tools/caconsole` runs it in the meantime.
 
 **On Linux and macOS.** The tool package targets `net10.0` only, because
 `PackAsTool` cannot carry a platform-specific target framework (NETSDK1146) and
