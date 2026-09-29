@@ -88,16 +88,24 @@ public sealed class Pkcs11Session : IDisposable
         return _library.GenerateKeyPair(Handle, mechanism, [.. publicTemplate], [.. privateTemplate]);
     }
 
+    /// <param name="usage">What the pair is FOR. <see cref="Pkcs11KeyPairUsage.KeyAgreement"/> swaps
+    /// sign/verify for <c>CKA_DERIVE</c>, which <c>C_DeriveKey</c> requires — SoftHSM refuses a derivation
+    /// against a key generated without it, so this is not a flag only a strict HSM checks.</param>
     public (NativeULong publicKey, NativeULong privateKey) GenerateEcKeyPair(
-        string label, EllipticCurve curve = EllipticCurve.NistP256)
+        string label,
+        EllipticCurve curve = EllipticCurve.NistP256,
+        Pkcs11KeyPairUsage usage = Pkcs11KeyPairUsage.Signing)
     {
         using var scope = new NativeAllocationScope();
+        var agreeing = usage == Pkcs11KeyPairUsage.KeyAgreement;
 
         var publicTemplate = new[]
         {
             scope.Attribute(CKA_TOKEN, true),
             scope.Attribute(CKA_LABEL, label),
-            scope.Attribute(CKA_VERIFY, true),
+            // SWAPPED, never both: the enum's own rule, and for an agreement key a verify flag would claim a
+            // capability the key is not being generated for.
+            agreeing ? scope.Attribute(CKA_DERIVE, true) : scope.Attribute(CKA_VERIFY, true),
             scope.Attribute(CKA_EC_PARAMS, curve.EcParams()),
         };
 
@@ -107,7 +115,7 @@ public sealed class Pkcs11Session : IDisposable
             scope.Attribute(CKA_LABEL, label),
             scope.Attribute(CKA_PRIVATE, true),
             scope.Attribute(CKA_SENSITIVE, true),
-            scope.Attribute(CKA_SIGN, true),
+            agreeing ? scope.Attribute(CKA_DERIVE, true) : scope.Attribute(CKA_SIGN, true),
         };
 
         var mechanism = new CK_MECHANISM { Mechanism = CK_MECHANISM_TYPE.CKM_EC_KEY_PAIR_GEN };
@@ -308,6 +316,98 @@ public sealed class Pkcs11Session : IDisposable
         _library.DecryptInit(Handle, OaepMechanism(scope, hashAlgorithm), privateKeyHandle);
 
         return _library.Decrypt(Handle, data);
+    }
+
+    /// <summary>
+    /// Derives the raw ECDH shared secret between a private key on the token and a peer's public point —
+    /// the operation an elliptic-curve CMS recipient needs, where the content key is AGREED rather than
+    /// wrapped.
+    /// </summary>
+    /// <param name="peerPublicPoint">The peer's public key as the module expects it in
+    /// <c>CK_ECDH1_DERIVE_PARAMS.pPublicData</c>: for a NIST curve the uncompressed <c>04||X||Y</c> point,
+    /// for X25519 the raw 32-byte u-coordinate. NOT a DER SubjectPublicKeyInfo — strip that first.</param>
+    /// <param name="privateKeyHandle">The token's private key.</param>
+    /// <param name="sharedData">Optional shared data. Meaningful only with a hashing KDF; leave null for
+    /// <see cref="CK_EC_KDF_TYPE.CKD_NULL"/>, where the module would have nowhere to put it.</param>
+    /// <remarks>
+    /// <para>
+    /// <b>The KDF defaults to <c>CKD_NULL</c>, so this returns Z itself and the caller derives.</b> That is
+    /// deliberate rather than lazy. A CMS key-agreement recipient needs the X9.63 KDF over a
+    /// <c>ECC-CMS-SharedInfo</c> structure that carries the key-wrap OID and the user keying material — so
+    /// the shared info is a DER encoding the CALLER builds from the message. Asking the module for
+    /// <c>CKD_SHA256_KDF</c> would hand that construction to whatever the module happens to do with
+    /// <c>pSharedData</c>, which differs between modules and cannot be tested against RFC vectors. Managed
+    /// code can be.
+    /// </para>
+    /// <para>
+    /// <b>The derived object is created EXTRACTABLE and non-SENSITIVE</b>, because the whole point is to read
+    /// its bytes back out: <c>C_DeriveKey</c> yields a key OBJECT, not a buffer, and a sensitive one would
+    /// refuse <c>CKA_VALUE</c>. That is safe here and would not be for a long-lived key — Z is a per-message
+    /// intermediate, and the caller immediately turns it into a KEK it also holds in managed memory.
+    /// </para>
+    /// <para>
+    /// <b><c>CKA_VALUE_LEN</c> is deliberately NOT set.</b> Modules disagree about it for <c>CKD_NULL</c> —
+    /// some require it, others refuse a template that carries it — and letting the module size the secret
+    /// from the curve is the only form that works on both. A caller that needs a fixed length should check
+    /// what came back rather than asking for it here.
+    /// </para>
+    /// </remarks>
+    public byte[] DeriveEcdhSecret(
+        byte[] peerPublicPoint,
+        NativeULong privateKeyHandle,
+        CK_EC_KDF_TYPE kdf = CK_EC_KDF_TYPE.CKD_NULL,
+        byte[]? sharedData = null)
+    {
+        ArgumentNullException.ThrowIfNull(peerPublicPoint);
+        if (peerPublicPoint.Length == 0)
+        {
+            throw new ArgumentException("The peer's public point is empty.", nameof(peerPublicPoint));
+        }
+
+        // ONE scope covering the whole call: the module may read the parameter block during C_DeriveKey, so
+        // the unmanaged copies of the point and the shared data must outlive the call rather than the
+        // statement that allocated them.
+        using var scope = new NativeAllocationScope();
+
+        var parameters = new CK_ECDH1_DERIVE_PARAMS
+        {
+            Kdf = kdf,
+            PublicData = scope.Allocate(peerPublicPoint),
+            PublicDataLength = (NativeULong)peerPublicPoint.Length,
+            SharedData = sharedData is { Length: > 0 } ? scope.Allocate(sharedData) : IntPtr.Zero,
+            SharedDataLength = (NativeULong)(sharedData?.Length ?? 0),
+        };
+
+        var mechanism = new CK_MECHANISM
+        {
+            Mechanism = CK_MECHANISM_TYPE.CKM_ECDH1_DERIVE,
+            Parameter = scope.Allocate(parameters),
+            // Unsafe.SizeOf, matching what NativeAllocationScope.Allocate<T> actually COPIED. Marshal.SizeOf
+            // reports the native layout and would agree here — the struct is blittable with explicit Pack —
+            // but telling the module a length the allocation did not use is a buffer overread waiting for the
+            // day those two measures diverge.
+            ParameterLength = (NativeULong)System.Runtime.CompilerServices.Unsafe.SizeOf<CK_ECDH1_DERIVE_PARAMS>(),
+        };
+
+        var template = new[]
+        {
+            scope.Attribute(CK_ATTRIBUTE_TYPE.CKA_CLASS, CK_OBJECT_CLASS.CKO_SECRET_KEY),
+            scope.Attribute(CK_ATTRIBUTE_TYPE.CKA_KEY_TYPE, CK_KEY_TYPE.CKK_GENERIC_SECRET),
+            scope.Attribute(CK_ATTRIBUTE_TYPE.CKA_EXTRACTABLE, true),
+            scope.Attribute(CK_ATTRIBUTE_TYPE.CKA_SENSITIVE, false),
+        };
+
+        var derived = _library.DeriveKey(Handle, mechanism, privateKeyHandle, template);
+        try
+        {
+            return _library.GetAttributeValue(Handle, derived, CK_ATTRIBUTE_TYPE.CKA_VALUE);
+        }
+        finally
+        {
+            // A SESSION object, so the token would drop it at logout anyway — destroyed here so a caller that
+            // derives once per document does not accumulate handles for the life of the session.
+            _library.DestroyObject(Handle, derived);
+        }
     }
 
     /// <summary>Builds the OAEP mechanism; the parameter block lives in <paramref name="scope"/>, which must
