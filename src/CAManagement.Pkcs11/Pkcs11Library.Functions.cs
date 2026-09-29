@@ -61,6 +61,11 @@ public sealed partial class Pkcs11Library
         out NativeULong publicKey, out NativeULong privateKey);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate CK_RV CkDeriveKeyDelegate(
+        NativeULong session, ref CK_MECHANISM mechanism, NativeULong baseKey,
+        [In] CK_ATTRIBUTE[] template, NativeULong count, out NativeULong derivedKey);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate CK_RV CkGetAttributeValueDelegate(NativeULong session, NativeULong objectHandle, [In, Out] CK_ATTRIBUTE[] template, NativeULong count);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -116,6 +121,8 @@ public sealed partial class Pkcs11Library
     private CkCreateObjectDelegate _cCreateObject = null!;
     private CkDestroyObjectDelegate _cDestroyObject = null!;
     private CkGenerateKeyPairDelegate _cGenerateKeyPair = null!;
+    private CkDeriveKeyDelegate _cDeriveKey = null!;
+
     private CkGetAttributeValueDelegate _cGetAttributeValue = null!;
     private CkSetAttributeValueDelegate _cSetAttributeValue = null!;
     private CkFindObjectsInitDelegate _cFindObjectsInit = null!;
@@ -156,6 +163,7 @@ public sealed partial class Pkcs11Library
         _cCreateObject = Bind<CkCreateObjectDelegate>(_functions.C_CreateObject, nameof(_functions.C_CreateObject));
         _cDestroyObject = Bind<CkDestroyObjectDelegate>(_functions.C_DestroyObject, nameof(_functions.C_DestroyObject));
         _cGenerateKeyPair = Bind<CkGenerateKeyPairDelegate>(_functions.C_GenerateKeyPair, nameof(_functions.C_GenerateKeyPair));
+        _cDeriveKey = Bind<CkDeriveKeyDelegate>(_functions.C_DeriveKey, nameof(_functions.C_DeriveKey));
         _cGetAttributeValue = Bind<CkGetAttributeValueDelegate>(_functions.C_GetAttributeValue, nameof(_functions.C_GetAttributeValue));
         _cSetAttributeValue = Bind<CkSetAttributeValueDelegate>(_functions.C_SetAttributeValue, nameof(_functions.C_SetAttributeValue));
         _cFindObjectsInit = Bind<CkFindObjectsInitDelegate>(_functions.C_FindObjectsInit, nameof(_functions.C_FindObjectsInit));
@@ -345,6 +353,15 @@ public sealed partial class Pkcs11Library
         CheckRv(_cEncrypt(session, data, (NativeULong)data.Length, ciphertext, ref length), "C_Encrypt");
 
         return length == (NativeULong)ciphertext.Length ? ciphertext : ciphertext[..(int)length];
+    }
+
+    internal NativeULong DeriveKey(
+        NativeULong session, CK_MECHANISM mechanism, NativeULong baseKey, CK_ATTRIBUTE[] template)
+    {
+        CheckRv(
+            _cDeriveKey(session, ref mechanism, baseKey, template, (NativeULong)template.Length, out var derived),
+            "C_DeriveKey");
+        return derived;
     }
 
     internal void DecryptInit(NativeULong session, CK_MECHANISM mechanism, NativeULong key) =>
