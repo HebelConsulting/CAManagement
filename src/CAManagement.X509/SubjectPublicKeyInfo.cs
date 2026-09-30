@@ -18,6 +18,17 @@ public sealed class SubjectPublicKeyInfo
     /// <summary>The content of the subjectPublicKey BIT STRING.</summary>
     public byte[] PublicKeyBytes { get; }
 
+    /// <summary>
+    /// The public key ALGORITHM — <see cref="Oids.RsaEncryption"/> or <see cref="Oids.EcPublicKey"/>.
+    /// </summary>
+    /// <remarks>
+    /// Exposed because the right keyUsage for a DECRYPTION certificate depends on it and on nothing else:
+    /// key transport (RSA) needs <c>keyEncipherment</c>, key agreement (EC) needs <c>keyAgreement</c>, and
+    /// naming the wrong one produces a certificate that works everywhere except where it is checked (#18).
+    /// A caller states the purpose; this is what lets the answer be derived rather than guessed.
+    /// </remarks>
+    public string AlgorithmOid => _algorithmOid;
+
     private SubjectPublicKeyInfo(string algorithmOid, string? namedCurveOid, byte[] publicKeyBytes)
     {
         _algorithmOid = algorithmOid;

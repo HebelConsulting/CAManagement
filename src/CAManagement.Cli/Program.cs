@@ -47,6 +47,18 @@ app.Configure(config =>
     config.AddCommand<OcspRespondCommand>("ocsp-respond")
         .WithDescription("Answer OCSP requests (file mode or HTTP) from the CA state file.");
 
+    // A CASCADING branch (owner, 2026-09-30), because there will be other token commands and
+    // `caconsole yubikey <verb>` is where a reader will look for them. The branch also hides the mechanism:
+    // `provision` drives ykman today and could drive the PIV applet directly later without the caller
+    // noticing (#21).
+    config.AddBranch("yubikey", yubikey =>
+    {
+        yubikey.SetDescription("Prepare and inspect a YubiKey's PIV slots.");
+        yubikey.AddCommand<YubikeyProvisionCommand>("provision")
+            .WithDescription("Generate a key in the Key Management slot, have the card sign a request, "
+                + "issue a decryption certificate and import it.");
+    });
+
     config.AddCommand<MobileConfigCommand>("mobileconfig")
         .WithDescription("Build an Apple configuration profile (.mobileconfig) from a PKCS#12 identity and/or root certificates.");
 });

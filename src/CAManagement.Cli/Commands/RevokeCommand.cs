@@ -32,6 +32,11 @@ public sealed class RevokeCommand : Command<RevokeCommand.Settings>
         [Description("User PIN (required with --state token).")]
         public string? Pin { get; init; }
 
+        [CommandOption("--manifest <FILE>")]
+        [Description("Also record the revocation in this enrolment manifest, so SimplArchive's import can "
+            + "withdraw the certificate it enrolled (#21).")]
+        public string? Manifest { get; init; }
+
 
         public override ValidationResult Validate() =>
             CaStateStores.IsToken(State) && (CaLabel is null || Pin is null)
@@ -51,14 +56,33 @@ public sealed class RevokeCommand : Command<RevokeCommand.Settings>
 
         var state = store.Load();
 
-        if (state.Revoked.Any(r => r.SerialHex == serialHex))
+        // ALREADY REVOKED IS NOT NOTHING TO DO where a manifest is being kept. The CA's own state is already
+        // correct, but the manifest is a separate, later-added record — so a revocation performed before
+        // manifests existed, or with the option omitted, must still be able to reach the consumer. Recording
+        // it is an upsert by serial, so doing it twice changes nothing.
+        var alreadyRevoked = state.Revoked.FirstOrDefault(r => r.SerialHex == serialHex);
+        var revokedAt = alreadyRevoked?.RevokedAtUtc ?? DateTimeOffset.UtcNow;
+
+        if (alreadyRevoked is null)
         {
-            AnsiConsole.MarkupLine($"[yellow]Serial {serialHex} is already revoked.[/]");
-            return 0;
+            state.Revoked.Add(new CaStateFile.RevokedEntry(serialHex, revokedAt, settings.Reason));
+            store.Save(state);
         }
 
-        state.Revoked.Add(new CaStateFile.RevokedEntry(serialHex, DateTimeOffset.UtcNow, settings.Reason));
-        store.Save(state);
+        if (settings.Manifest is { Length: > 0 } manifestPath)
+        {
+            var manifest = EnrolmentManifest.Read(manifestPath);
+            manifest.RecordRevoked(serialHex, revokedAt, settings.Reason.ToString());
+            manifest.Write(manifestPath);
+            AnsiConsole.MarkupLine($"[grey]Recorded in[/] [blue]{Markup.Escape(manifestPath)}[/].");
+        }
+
+        if (alreadyRevoked is not null)
+        {
+            AnsiConsole.MarkupLine($"[yellow]Serial {serialHex} was already revoked[/] "
+                + $"({revokedAt:yyyy-MM-dd}){(settings.Manifest is null ? "." : "; the manifest now says so too.")}");
+            return 0;
+        }
 
         AnsiConsole.MarkupLine($"[green]Revoked[/] serial [yellow]{serialHex}[/] ({settings.Reason}); " +
             $"run [blue]gen-crl[/] to publish.");
