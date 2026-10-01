@@ -156,12 +156,72 @@ Every command that touches the HSM shares these options:
 | `set-pin` | Change the token user PIN. |
 | `asn <file>` | Analyse a certificate, CSR, CRL, key, PKCS#12, CMS or OCSP message as an annotated tree. |
 | `init-ca` | Generate a CA key pair on the token and write a self-signed root. |
-| `issue` | Issue a certificate from a PKCS#10 request, signed by the token key. |
-| `revoke` | Record a revocation in the CA state. |
+| `issue` | Issue a certificate from a PKCS#10 request, signed by the token key. `--profile key-management` issues a **decryption** certificate instead of a signing one. |
+| `revoke` | Record a revocation in the CA state, and with `--manifest` in the enrolment manifest too. |
 | `gen-crl` | Sign a CRL from the CA state. |
 | `ocsp-respond` | Answer OCSP requests (file mode or an HTTP responder). |
+| `yubikey provision` | Prepare a YubiKey end to end: generate a key in the Key Management slot, have the **card** sign a request, issue a decryption certificate and import it. Needs `ykman`. |
 | `mobileconfig` | Build an Apple configuration profile (`.mobileconfig`) from a PKCS#12 identity and/or root certificates — the one-tap install path for Apple devices. No token involved. |
 | `sign` / `verify` | Sign or verify a file with a token key, using multi-part signing for data of any size. |
+
+### Provisioning a YubiKey — `yubikey provision`
+
+```bash
+caconsole yubikey provision --holder anna@acme.test \
+    --token-label ca-token --pin "$CA_PIN" --ca-label ca-root --ca-cert ca.crt \
+    --label "YubiKey 5C" --manifest enrolments.json
+```
+
+One command for the whole card: it generates an **ECCP256** key in PIV slot **9d** (Key Management), has the
+**card** sign a certificate request, issues a certificate for that key, imports it, and reads the slot back.
+
+**What the certificate declares, and why it matters.** The slot's job is to be the recipient of encrypted
+content, so the certificate carries `keyAgreement` for an EC key or `keyEncipherment` for an RSA one — never
+`digitalSignature`, which is the one bit that does not apply. The bit is **derived from the key**, not chosen:
+`caconsole issue --profile key-management` does the same for a request you already have. A
+signature-only certificate still decrypts in practice, because neither the token nor most CMS libraries check
+`keyUsage` — so it fails only against consumers that *do* check, and then as a wrong-looking decryption error.
+`emailProtection` is set alongside, which is the other extension a strict S/MIME peer looks at.
+
+**It will not quietly destroy a key.** Where the slot is occupied the command prints what is there and stops:
+
+- `--force` replaces the **certificate** and keeps the key. This is the repair for a card whose certificate
+  declares the wrong usage — re-issuing is non-destructive, because only key generation destroys a key.
+- `--regenerate-key` replaces the **key**, which is irreversible: anything encrypted to the old one becomes
+  unreadable.
+
+Any certificate already in the slot is exported beside the new one before it is replaced.
+
+**A caveat the hardware imposes.** A YubiKey whose PIV applet is older than **5.3** reports
+`Private key type: EMPTY` whether or not a key is there — it simply does not publish key metadata. The
+command therefore treats "EMPTY" on such a card as *unknown*, not *absent*, and refuses to generate without
+`--regenerate-key`. Only a decryption settles whether the key is real.
+
+**Prerequisite: `ykman`.** A YubiKey cannot be provisioned over PKCS#11 at all — `libykcs11` implements no
+key generation for PIV slots and cannot even see an empty one — so this drives the YubiKey Manager CLI.
+Install it through the host's package manager (`dnf install yubikey-manager`, `apt-get install
+yubikey-manager`, `brew install ykman`), never an unpacked download. Every command run against the card and
+its response are echoed, with the PIN and management key redacted.
+
+### The enrolment manifest — `--manifest`
+
+`provision` and `revoke` can append to a JSON file that records **what was issued and to whom**, which is
+what a document archive needs in order to enrol certificates in bulk:
+
+```json
+{
+  "issued": [
+    { "holder": "anna@acme.test", "label": "YubiKey 5C", "serial": "2CEF6410C6745437",
+      "thumbprint": "CA5F…", "certificatePem": "-----BEGIN CERTIFICATE-----…" }
+  ],
+  "revoked": [ { "serial": "2334CB43CDEC7428", "at": "2026-09-30T19:36:21Z", "reason": "KeyCompromise" } ]
+}
+```
+
+Deliberately **separate from `ca-state.json`**, which holds what the CA needs to run — the CRL number and its
+revocation list — and holds no issued certificates and no e-mail addresses at all. Rows are upserted by
+serial, so re-provisioning a card replaces its row rather than adding a second. Only the public certificate is
+ever written.
 
 ### Token administration (a softhsm2-util stand-in)
 

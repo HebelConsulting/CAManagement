@@ -44,6 +44,9 @@ public static class Oids
     public const string ServerAuthentication = "1.3.6.1.5.5.7.3.1";
     public const string ClientAuthentication = "1.3.6.1.5.5.7.3.2";
 
+    /// <summary>id-kp-emailProtection — what a strict S/MIME peer looks for beside keyUsage (#18).</summary>
+    public const string EmailProtection = "1.3.6.1.5.5.7.3.4";
+
     // Digest algorithms
     public const string Sha1 = "1.3.14.3.2.26";
     public const string Sha256 = "2.16.840.1.101.3.4.2.1";

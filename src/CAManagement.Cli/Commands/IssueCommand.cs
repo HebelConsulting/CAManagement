@@ -32,6 +32,11 @@ public sealed class IssueCommand : Command<IssueCommand.Settings>
         [DefaultValue("leaf.crt")]
         public string Out { get; init; } = "leaf.crt";
 
+        [CommandOption("--profile <PROFILE>")]
+        [Description("What the certificate is FOR: 'signing' (default) or 'key-management' (a decryption "
+            + "certificate — keyAgreement for EC, keyEncipherment for RSA, plus emailProtection).")]
+        [DefaultValue("signing")]
+        public string Profile { get; init; } = "signing";
     }
 
     protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
@@ -44,6 +49,14 @@ public sealed class IssueCommand : Command<IssueCommand.Settings>
 
         var csr = CertificateSigningRequest.Decode(ReadDer(settings.Csr)); // verifies proof of possession
 
+        // WHAT THE CERTIFICATE IS FOR decides the keyUsage, and the KEY decides which bit expresses it
+        // (#18). This used to be a hard-coded `digitalSignature`, which is the one bit that does not apply to
+        // a decryption certificate — so a certificate issued for a PIV Key Management slot declared a usage
+        // it could never honour, worked anyway against consumers that do not check, and was refused by the
+        // ones that do.
+        var purpose = CertificatePurpose.For(
+            CertificatePurpose.Parse(settings.Profile), csr.SubjectPublicKeyInfo.AlgorithmOid);
+
         var certificateDer = new CertificateBuilder
         {
             Subject = csr.Subject,
@@ -53,7 +66,10 @@ public sealed class IssueCommand : Command<IssueCommand.Settings>
             Extensions =
             [
                 CertificateExtensions.BasicConstraints(isCa: false),
-                CertificateExtensions.KeyUsage(KeyUsages.DigitalSignature),
+                CertificateExtensions.KeyUsage(purpose.KeyUsage),
+                .. purpose.ExtendedKeyUsages.Count > 0
+                    ? new[] { CertificateExtensions.ExtendedKeyUsage([.. purpose.ExtendedKeyUsages]) }
+                    : [],
                 CertificateExtensions.SubjectKeyIdentifier(csr.SubjectPublicKeyInfo.ComputeKeyIdentifier()),
                 CertificateExtensions.AuthorityKeyIdentifier(caSpki.ComputeKeyIdentifier()),
                 // CA policy: subject alternative names are the only extension request honored.
@@ -64,8 +80,11 @@ public sealed class IssueCommand : Command<IssueCommand.Settings>
         File.WriteAllText(settings.Out, Pem.Encode("CERTIFICATE", certificateDer));
 
         using var issued = X509CertificateLoader.LoadCertificate(certificateDer);
+        // The USAGE is named in the output, because it is the thing that silently differed: a certificate
+        // whose keyUsage is wrong looks identical to a correct one everywhere except where it is checked.
         AnsiConsole.MarkupLine($"[green]Issued[/] [blue]{Markup.Escape(issued.Subject)}[/], " +
-            $"serial [yellow]{issued.SerialNumber}[/], valid {settings.Days} days, written to [blue]{settings.Out}[/].");
+            $"serial [yellow]{issued.SerialNumber}[/], valid {settings.Days} days, " +
+            $"keyUsage [yellow]{purpose.KeyUsage}[/], written to [blue]{settings.Out}[/].");
 
         return 0;
     }
