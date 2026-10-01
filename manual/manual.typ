@@ -379,11 +379,16 @@ document archive needs in order to enrol certificates in bulk:
 }
 ```
 
-SimplArchive consumes it with one command:
+SimplArchive consumes it with one command — the manifest is the argument, not an option:
 
 ```sh
-saconsole certificates import --manifest enrolments.json
+saconsole certificates import enrolments.json [--dry-run]
 ```
+
+It is *safe to re-run*: a certificate already enrolled is reported as *unchanged* rather than as an error, so
+an interrupted import is finished by running it again. `--dry-run` reports what would change and sends
+nothing. Revocations join on the *serial*, which is the only identifier a CA speaks — it names what it
+revoked by serial and mentions a thumbprint nowhere.
 
 Four properties, each deliberate:
 
