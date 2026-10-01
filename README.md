@@ -63,6 +63,14 @@ it elsewhere (a YubiKey PKCS#11 library, a vendor HSM) with `--module`.
 
 ## Manual
 
+A typeset **operator manual** lives at
+[`manual/CAManagement-caconsole-Manual.pdf`](manual/CAManagement-caconsole-Manual.pdf) (Typst sources
+alongside, rebuilt with `scripts/generate-manual.sh`). It is task-ordered — stand up a CA, issue, provision a
+reader's card, revoke and publish, administer a token, inspect an artefact — and carries the traps whose
+symptom points somewhere else. The sections below stay the quick reference.
+
+### Installing the tool
+
 Install it as a .NET tool from nuget.org — no credentials, nothing to build:
 
 ```sh
