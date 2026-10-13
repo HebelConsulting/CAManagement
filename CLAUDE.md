@@ -25,7 +25,9 @@ Guidance for AI assistants working in this repository.
   in `src/Directory.Build.props` (`TreatWarningsAsErrors`), so local builds and
   CI refuse identically. NuGet audit advisories (NU1901–NU1904) are excluded
   from the promotion because CI's vulnerable-dependency scan owns blocking
-  those — a handover, not a hole.
+  those — a handover, not a hole. The scan (`scripts/vulnerability-scan.sh`)
+  also runs daily (`vulnerability-scan.yml`), so an advisory published between
+  changes opens an issue instead of waiting for the next PR.
 - **No squash merges.** A pull request lands with its individual commits intact
   (merge commit or rebase-merge, never squash) — the commits are part of the
   record, and flattening them discards it. Enforced in the repository settings
