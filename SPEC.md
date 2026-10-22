@@ -126,6 +126,27 @@ YubiKey's own Key Management certificate, issued by `caconsole`, states `keyUsag
 while demonstrably decrypting a real CMS envelope, because neither `EnvelopedCms` nor the token enforces
 `keyUsage`. A consumer that refuses a certificate on `keyUsage` grounds would therefore refuse one that works.
 
+## Finding session objects too (added 2026-10-22, version 0.9.0)
+
+Every `FindObjects` overload pins `CKA_TOKEN = true`, and stays so: its callers sign with, overwrite or wipe what
+they find, and those all mean a **persistent** object — a session object of the same class or label must not be
+mistaken for one.
+
+`FindObjectsIncludingSessionObjects(CK_OBJECT_CLASS objectClass)` matches on class alone, for the enumerating
+**reader** who needs what the module offers rather than what it stores.
+
+**Why it exists, measured with real hardware 2026-10-22.** The manufacturer's PIV module for a widely used security
+key exposes each key slot's **attestation certificate** ("X.509 Certificate for PIV Attestation 9d") as a session
+object (`CKA_TOKEN = false`), created on demand. A token-only search returns the slot's own certificate and
+silently NOT its attestation — a consumer then concludes "this key cannot attest", which is not an error anyone
+sees (SimplArchive's desktop enrolled without attestation because of it). Kept as a separate, explicitly named
+method rather than a flag on the existing overloads, so no writing caller can widen its search by accident.
+
+**Caveat:** session objects belong to the application's sessions on the token, so the result can include an object
+this process created in another open session. Never use it to decide what to destroy. Covered by
+`ObjectManagementTests.Session_objects_are_found_only_by_the_call_that_includes_them` (SoftHSM2; the test creates
+its session object through the internal `C_CreateObject`, since the public surface writes token objects only).
+
 ## Token labels must be unique (Pkcs11 package)
 
 - **A label that resolves to MORE THAN ONE token is refused, not guessed between.** `ResolveSlot` used to

@@ -90,6 +90,60 @@ public sealed class ObjectManagementTests(SoftHsmFixture fixture)
     }
 
     [Fact]
+    public void Session_objects_are_found_only_by_the_call_that_includes_them()
+    {
+        // A module may synthesise objects on demand as SESSION objects (CKA_TOKEN = false) — the manufacturer's
+        // PIV module exposes a key slot's attestation certificate exactly so. The token-only overloads must keep
+        // ignoring such an object (they serve writes and wipes, which mean persistent objects); the enumerating
+        // reader's call must see it alongside the token's own certificates.
+        using var library = new Pkcs11Library(fixture.CreateOptions());
+        using var session = library.OpenSession();
+        using var _ = session.Login(SoftHsmFixture.UserPin);
+
+        using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var certificate = new CertificateRequest("CN=attestation", ecdsa, HashAlgorithmName.SHA256)
+            .CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+
+        var tokenObject = session.ImportX509Certificate(
+            $"token-{Guid.NewGuid():N}", certificate.RawData, certificate.SubjectName.RawData);
+        NativeULong sessionObject;
+        using (var scope = new NativeAllocationScope())
+        {
+            sessionObject = library.CreateObject(session.Handle,
+            [
+                scope.Attribute(CK_ATTRIBUTE_TYPE.CKA_CLASS, CK_OBJECT_CLASS.CKO_CERTIFICATE),
+                scope.Attribute(CK_ATTRIBUTE_TYPE.CKA_CERTIFICATE_TYPE, CK_CERTIFICATE_TYPE.CKC_X_509),
+                scope.Attribute(CK_ATTRIBUTE_TYPE.CKA_TOKEN, false),
+                scope.Attribute(CK_ATTRIBUTE_TYPE.CKA_LABEL, $"session-{Guid.NewGuid():N}"),
+                scope.Attribute(CK_ATTRIBUTE_TYPE.CKA_VALUE, certificate.RawData),
+                scope.Attribute(CK_ATTRIBUTE_TYPE.CKA_SUBJECT, certificate.SubjectName.RawData),
+            ]);
+        }
+
+        try
+        {
+            var tokenOnly = session.FindObjects(CK_OBJECT_CLASS.CKO_CERTIFICATE);
+            Assert.Contains(tokenObject, tokenOnly);
+            Assert.DoesNotContain(sessionObject, tokenOnly);
+
+            var everything = session.FindObjectsIncludingSessionObjects(CK_OBJECT_CLASS.CKO_CERTIFICATE);
+            Assert.Contains(tokenObject, everything);
+            Assert.Contains(sessionObject, everything);
+            Assert.Equal(tokenOnly.Count + 1, everything.Count);
+
+            // The class still discriminates: a certificate search must not return the session's other objects.
+            Assert.All(everything, handle =>
+                Assert.Equal(CK_OBJECT_CLASS.CKO_CERTIFICATE, session.GetObjectClass(handle)));
+            Assert.DoesNotContain(sessionObject, session.FindObjectsIncludingSessionObjects(CK_OBJECT_CLASS.CKO_DATA));
+        }
+        finally
+        {
+            session.DestroyObject(sessionObject);
+            session.DestroyObject(tokenObject);
+        }
+    }
+
+    [Fact]
     public void Data_objects_round_trip_and_finding_pages_past_64_handles()
     {
         using var library = new Pkcs11Library(fixture.CreateOptions());

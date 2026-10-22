@@ -18,4 +18,10 @@
         <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.10" />
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
     </ItemGroup>
+
+    <ItemGroup>
+        <!-- The integration tests create SESSION objects (CKA_TOKEN = false) through the raw C_CreateObject, which
+             the public surface deliberately does not offer: everything this package writes is a token object. -->
+        <InternalsVisibleTo Include="CAManagement.Tests" />
+    </ItemGroup>
 </Project>
