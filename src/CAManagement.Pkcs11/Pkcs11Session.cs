@@ -168,6 +168,41 @@ public sealed class Pkcs11Session : IDisposable
         return _library.FindObjects(Handle, template);
     }
 
+    /// <summary>
+    /// Every object of <paramref name="objectClass"/> this session can see — token objects AND session objects —
+    /// with no further discriminator.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The <see cref="FindObjects(CK_OBJECT_CLASS)"/> overloads all pin <c>CKA_TOKEN = true</c>, which is right for
+    /// what they serve: a caller about to sign with, overwrite or wipe an object means a PERSISTENT one, and a
+    /// session object of the same class must not be mistaken for it. This call drops that restriction, for the
+    /// enumerating READER who needs what the module offers rather than what it stores.
+    /// </para>
+    /// <para>
+    /// <b>Why it exists:</b> a module may synthesise objects on demand as session objects
+    /// (<c>CKA_TOKEN = false</c>). The manufacturer's PIV module for a widely used security key exposes each key
+    /// slot's <b>attestation certificate</b> ("X.509 Certificate for PIV Attestation 9d") exactly so — a token-only
+    /// search returns the slot's certificate and silently NOT its attestation, which reads as "this key cannot
+    /// attest" rather than as an error (found with real hardware 2026-10-22).
+    /// </para>
+    /// <para>
+    /// Session objects belong to the application's sessions on the token, so a result may include objects this
+    /// process created itself in another open session. Never use the result to decide what to destroy.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<NativeULong> FindObjectsIncludingSessionObjects(CK_OBJECT_CLASS objectClass)
+    {
+        using var scope = new NativeAllocationScope();
+
+        var template = new[]
+        {
+            scope.Attribute(CKA_CLASS, objectClass),
+        };
+
+        return _library.FindObjects(Handle, template);
+    }
+
     public IReadOnlyList<NativeULong> FindObjects(CK_OBJECT_CLASS objectClass, CK_KEY_TYPE keyType)
     {
         using var scope = new NativeAllocationScope();
